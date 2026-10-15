@@ -87,6 +87,11 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                 KeyCode::Char('h') => app.header.toggle_between(0.0, 1.0),
                 KeyCode::Char('s') => app.sidebar.toggle_between(0.0, 1.0),
                 KeyCode::Char('f') => app.footer.toggle_between(0.0, 1.0),
+                KeyCode::Char(' ') => {
+                    app.header.toggle_between(0.0, 1.0);
+                    app.sidebar.toggle_between(0.0, 1.0);
+                    app.footer.toggle_between(0.0, 1.0);
+                }
                 _ => {}
             }
         }
@@ -120,7 +125,7 @@ fn ui(f: &mut Frame, app: &App) {
     render_panel(f, "Main", horizontal[1], Color::Reset);
     render_panel(f, "Footer", vertical[2], Color::Yellow);
 
-    let help = Paragraph::new("[h] header  [s] sidebar  [f] footer  [q] quit")
+    let help = Paragraph::new("[h] header  [s] sidebar  [f] footer  [Space] all  [q] quit")
         .alignment(Alignment::Center);
     let help_area = Rect::new(
         horizontal[1].x + 2,
