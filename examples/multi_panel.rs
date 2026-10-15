@@ -129,8 +129,8 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
 fn ui(f: &mut Frame, app: &App) {
     let area = f.area();
 
-    let header_height = (app.header.current() * 3.0).round() as u16;
-    let footer_height = (app.footer.current() * 3.0).round() as u16;
+    let header_height = (app.header.current() * 5.0).round() as u16;
+    let footer_height = (app.footer.current() * 5.0).round() as u16;
     let left_width = (app.left_sidebar.current() * area.width as f64 * 0.25).round() as u16;
     let right_width = (app.right_sidebar.current() * area.width as f64 * 0.25).round() as u16;
 
