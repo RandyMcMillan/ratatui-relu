@@ -92,8 +92,14 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                     app.sidebar.toggle_between(0.0, 1.0);
                     app.footer.toggle_between(0.0, 1.0);
                 }
-                KeyCode::Up => app.footer.set_target(1.0),
-                KeyCode::Down => app.header.set_target(1.0),
+                KeyCode::Up => {
+                    app.header.set_target(0.0);
+                    app.footer.set_target(1.0);
+                }
+                KeyCode::Down => {
+                    app.footer.set_target(0.0);
+                    app.header.set_target(1.0);
+                }
                 KeyCode::Right => app.sidebar.set_target(1.0),
                 KeyCode::Left => app.sidebar.set_target(0.0),
                 _ => {}
@@ -130,7 +136,7 @@ fn ui(f: &mut Frame, app: &App) {
     render_panel(f, "Footer", vertical[2], Color::Yellow);
 
     let help = Paragraph::new(
-        "[h/s/f] toggle  [Space] all  [↑] footer  [↓] header  [→] sidebar  [←] close sidebar  [q] quit",
+        "[h/s/f] toggle  [Space] all  [↑] close header + open footer  [↓] close footer + open header  [→] open sidebar  [←] close sidebar  [q] quit",
     )
     .alignment(Alignment::Center);
     let help_area = Rect::new(
