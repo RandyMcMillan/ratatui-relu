@@ -19,35 +19,28 @@ use ratatui::{
     Frame, Terminal,
 };
 
+use ratarelu::animation::Transition;
 use ratarelu::layout::handwired_layout_engine;
 
 struct App {
-    target_toggle: f64,
-    current_toggle: f64,
+    toggle: Transition,
     should_quit: bool,
 }
 
 impl App {
     fn new() -> Self {
         Self {
-            target_toggle: 0.0,
-            current_toggle: 0.0,
+            toggle: Transition::new(0.0, 3.0),
             should_quit: false,
         }
     }
 
     fn toggle(&mut self) {
-        self.target_toggle = if self.target_toggle > 0.5 { 0.0 } else { 1.0 };
+        self.toggle.toggle_between(0.0, 1.0);
     }
 
     fn update(&mut self, dt: Duration) {
-        let speed = 3.0; // toggle units per second
-        let step = speed * dt.as_secs_f64();
-        if self.current_toggle < self.target_toggle {
-            self.current_toggle = f64::min(self.current_toggle + step, self.target_toggle);
-        } else if self.current_toggle > self.target_toggle {
-            self.current_toggle = f64::max(self.current_toggle - step, self.target_toggle);
-        }
+        self.toggle.update(dt);
     }
 }
 
@@ -94,19 +87,21 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
 
 fn ui(f: &mut Frame, app: &App) {
     let area = f.area();
+    let current = app.toggle.current();
+    let target = app.toggle.target();
 
-    let (layout, gate) = handwired_layout_engine(app.current_toggle, area.width);
+    let (layout, gate) = handwired_layout_engine(current, area.width);
 
     let text = Text::from(vec![
         Line::from(vec![
             Span::raw("Animated Sidebar Demo | current: "),
             Span::styled(
-                format!("{:.3}", app.current_toggle),
+                format!("{:.3}", current),
                 Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
             ),
             Span::raw(" target: "),
             Span::styled(
-                format!("{:.1}", app.target_toggle),
+                format!("{:.1}", target),
                 Style::default().fg(Color::Yellow),
             ),
             Span::raw(format!(" | gate: {:.3}", gate)),
