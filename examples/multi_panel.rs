@@ -25,7 +25,8 @@ use ratarelu::animation::Transition;
 
 struct App {
     header: Transition,
-    sidebar: Transition,
+    left_sidebar: Transition,
+    right_sidebar: Transition,
     footer: Transition,
     should_quit: bool,
 }
@@ -35,7 +36,8 @@ impl App {
         Self {
             // Start all panels open.
             header: Transition::new(1.0, 4.0),
-            sidebar: Transition::new(1.0, 4.0),
+            left_sidebar: Transition::new(1.0, 4.0),
+            right_sidebar: Transition::new(1.0, 4.0),
             footer: Transition::new(1.0, 4.0),
             should_quit: false,
         }
@@ -43,7 +45,8 @@ impl App {
 
     fn update(&mut self, dt: Duration) {
         self.header.update(dt);
-        self.sidebar.update(dt);
+        self.left_sidebar.update(dt);
+        self.right_sidebar.update(dt);
         self.footer.update(dt);
     }
 }
@@ -85,11 +88,13 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
                 KeyCode::Char('h') => app.header.toggle_between(0.0, 1.0),
-                KeyCode::Char('s') => app.sidebar.toggle_between(0.0, 1.0),
+                KeyCode::Char('l') => app.left_sidebar.toggle_between(0.0, 1.0),
+                KeyCode::Char('r') => app.right_sidebar.toggle_between(0.0, 1.0),
                 KeyCode::Char('f') => app.footer.toggle_between(0.0, 1.0),
                 KeyCode::Char(' ') => {
                     app.header.toggle_between(0.0, 1.0);
-                    app.sidebar.toggle_between(0.0, 1.0);
+                    app.left_sidebar.toggle_between(0.0, 1.0);
+                    app.right_sidebar.toggle_between(0.0, 1.0);
                     app.footer.toggle_between(0.0, 1.0);
                 }
                 KeyCode::Up => {
@@ -100,8 +105,8 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
                     app.footer.set_target(0.0);
                     app.header.set_target(1.0);
                 }
-                KeyCode::Right => app.sidebar.set_target(1.0),
-                KeyCode::Left => app.sidebar.set_target(0.0),
+                KeyCode::Right => app.right_sidebar.toggle_between(0.0, 1.0),
+                KeyCode::Left => app.left_sidebar.toggle_between(0.0, 1.0),
                 _ => {}
             }
         }
@@ -114,7 +119,8 @@ fn ui(f: &mut Frame, app: &App) {
 
     let header_height = (app.header.current() * 3.0).round() as u16;
     let footer_height = (app.footer.current() * 3.0).round() as u16;
-    let sidebar_width = (app.sidebar.current() * 30.0).round() as u16;
+    let left_width = (app.left_sidebar.current() * 15.0).round() as u16;
+    let right_width = (app.right_sidebar.current() * 15.0).round() as u16;
 
     let vertical = Layout::default()
         .direction(Direction::Vertical)
@@ -127,16 +133,21 @@ fn ui(f: &mut Frame, app: &App) {
 
     let horizontal = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(sidebar_width), Constraint::Min(0)])
+        .constraints([
+            Constraint::Length(left_width),
+            Constraint::Min(0),
+            Constraint::Length(right_width),
+        ])
         .split(vertical[1]);
 
     render_panel(f, "Header", vertical[0], Color::Blue);
-    render_panel(f, "Sidebar", horizontal[0], Color::Green);
+    render_panel(f, "Left", horizontal[0], Color::Green);
     render_panel(f, "Main", horizontal[1], Color::Reset);
+    render_panel(f, "Right", horizontal[2], Color::Magenta);
     render_panel(f, "Footer", vertical[2], Color::Yellow);
 
     let help = Paragraph::new(
-        "[h/s/f] toggle  [Space] all  [↑] close header + open footer  [↓] close footer + open header  [→] open sidebar  [←] close sidebar  [q] quit",
+        "[h/l/r/f] toggle  [Space] all  [↑] close header + open footer  [↓] close footer + open header  [←] toggle left  [→] toggle right  [q] quit",
     )
     .alignment(Alignment::Center);
     let help_area = Rect::new(
