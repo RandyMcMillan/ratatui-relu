@@ -1,0 +1,8 @@
+[package]
+name = "ratarelu"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ratatui = "0.30.2"
+crossterm = "0.29"
