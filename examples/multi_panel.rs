@@ -156,19 +156,19 @@ fn ui(f: &mut Frame, app: &App) {
     render_panel(f, "Left", horizontal[0], Color::Green);
     render_panel(f, "Main", horizontal[1], Color::Reset);
     render_panel(f, "Right", horizontal[2], Color::Magenta);
-    render_panel(f, "Footer", vertical[2], Color::Yellow);
+
+    let footer_block = Block::default()
+        .title("Footer")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+    let footer_inner = footer_block.inner(vertical[2]);
+    f.render_widget(footer_block, vertical[2]);
 
     let help = Paragraph::new(
         "[h/l/r/f] toggle  [Space] all  [↑] close header + open footer  [↓] close footer + open header  [←] toggle left / open right if left closed  [→] toggle right / open left if right closed  [q] quit",
     )
     .alignment(Alignment::Center);
-    let help_area = Rect::new(
-        horizontal[1].x + 2,
-        horizontal[1].y + horizontal[1].height.saturating_sub(2) / 2,
-        horizontal[1].width.saturating_sub(4),
-        1,
-    );
-    f.render_widget(help, help_area);
+    f.render_widget(help, footer_inner);
 }
 
 fn render_panel(f: &mut Frame, title: &str, area: Rect, color: Color) {
