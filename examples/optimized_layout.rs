@@ -31,11 +31,7 @@ fn main_width(t: f64, total_width: f64, target_sidebar: f64) -> f64 {
 /// Differentiable penalty for violating a minimum value.
 fn below_penalty(value: f64, minimum: f64) -> f64 {
     let diff = minimum - value;
-    if diff > 0.0 {
-        diff * diff
-    } else {
-        0.0
-    }
+    if diff > 0.0 { diff * diff } else { 0.0 }
 }
 
 fn loss(t: f64, total_width: f64, target_sidebar: f64, min_main: f64) -> f64 {

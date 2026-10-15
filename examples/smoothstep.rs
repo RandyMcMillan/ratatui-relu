@@ -25,7 +25,10 @@ fn smoothstep(t: f64, low: f64, high: f64) -> f64 {
 }
 
 fn main() {
-    println!("{:<8} {:>10} {:>10} {:>10}", "t", "relu", "sigmoid", "smoothstep");
+    println!(
+        "{:<8} {:>10} {:>10} {:>10}",
+        "t", "relu", "sigmoid", "smoothstep"
+    );
     println!("{}", "-".repeat(42));
 
     for i in 0..=20 {

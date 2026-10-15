@@ -1,5 +1,5 @@
 /// Handwired Ratatui Layout Example in Rust
-/// Demonstrates controlling TUI panel widths, visibility, and constraints 
+/// Demonstrates controlling TUI panel widths, visibility, and constraints
 /// using continuous ReLU gates instead of standard conditional branching.
 
 // Layout logic is self-contained and does not require Ratatui types directly.
@@ -55,7 +55,7 @@ pub fn handwired_layout_engine(toggle_flag: f64, total_width: u16) -> (LayoutDim
     // Continuous multiplexing over ReLU gates
     let continuous_sidebar_width = (gate * sidebar_high) + (inv_gate * sidebar_low);
     let sidebar_w = continuous_sidebar_width.round() as u16;
-    
+
     // Main panel dynamically takes up the remainder
     let main_w = total_width.saturating_sub(sidebar_w);
 

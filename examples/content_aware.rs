@@ -20,7 +20,12 @@ fn relu_step(t: f64, low: f64, high: f64) -> f64 {
 /// * `min_content`     - below this, sidebar is fully collapsed
 /// * `max_content`     - above this, sidebar is fully open
 /// * `max_width`       - largest desired sidebar width
-fn content_aware_sidebar(content_chars: f64, min_content: f64, max_content: f64, max_width: f64) -> u16 {
+fn content_aware_sidebar(
+    content_chars: f64,
+    min_content: f64,
+    max_content: f64,
+    max_width: f64,
+) -> u16 {
     let gate = relu_step(content_chars, min_content, max_content);
     let width = gate * max_width;
     width.round() as u16

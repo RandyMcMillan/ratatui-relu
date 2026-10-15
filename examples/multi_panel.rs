@@ -5,20 +5,20 @@
 //!
 //! Run in a real terminal with: cargo run --example multi_panel
 
-use std::io::{self, stdout, Stdout};
+use std::io::{self, Stdout, stdout};
 use std::time::{Duration, Instant};
 
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
+    event::{self, Event, KeyCode, KeyEventKind},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
+    Frame, Terminal,
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     widgets::{Block, Borders, Paragraph},
-    Frame, Terminal,
 };
 
 use ratarelu::animation::Transition;

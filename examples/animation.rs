@@ -2,21 +2,21 @@
 //!
 //! Run in a real terminal with: cargo run --example animation
 
-use std::io::{self, stdout, Stdout};
+use std::io::{self, Stdout, stdout};
 use std::time::{Duration, Instant};
 
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
+    event::{self, Event, KeyCode, KeyEventKind},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
+    Frame, Terminal,
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph},
-    Frame, Terminal,
 };
 
 use ratarelu::animation::Transition;
@@ -74,7 +74,10 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
         app.update(dt);
         terminal.draw(|f| ui(f, app))?;
 
-        if event::poll(Duration::from_millis(16))? && let Event::Key(key) = event::read()? && key.kind == KeyEventKind::Press {
+        if event::poll(Duration::from_millis(16))?
+            && let Event::Key(key) = event::read()?
+            && key.kind == KeyEventKind::Press
+        {
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
                 KeyCode::Char('t') | KeyCode::Char(' ') => app.toggle(),
@@ -97,20 +100,19 @@ fn ui(f: &mut Frame, app: &App) {
             Span::raw("Animated Sidebar Demo | current: "),
             Span::styled(
                 format!("{:.3}", current),
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::raw(" target: "),
-            Span::styled(
-                format!("{:.1}", target),
-                Style::default().fg(Color::Yellow),
-            ),
+            Span::styled(format!("{:.1}", target), Style::default().fg(Color::Yellow)),
             Span::raw(format!(" | gate: {:.3}", gate)),
         ]),
         Line::from("Press [t]/[Space] to animate, [q]/[Esc] to quit."),
     ]);
 
-    let header = Paragraph::new(text)
-        .block(Block::default().title("Animation").borders(Borders::ALL));
+    let header =
+        Paragraph::new(text).block(Block::default().title("Animation").borders(Borders::ALL));
 
     let vertical = Layout::default()
         .direction(Direction::Vertical)

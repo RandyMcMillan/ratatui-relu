@@ -2,22 +2,20 @@
 //! Demonstrates controlling TUI panel widths, visibility, and constraints
 //! using continuous ReLU gates instead of standard conditional branching.
 
-use std::io::{self, stdout, Stdout};
+use std::io::{self, Stdout, stdout};
 
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
-    terminal::{
-        disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
-    },
     ExecutableCommand,
+    event::{self, Event, KeyCode, KeyEventKind},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
+    Frame, Terminal,
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Wrap},
-    Frame, Terminal,
 };
 
 mod layout;
@@ -88,7 +86,11 @@ fn ui(f: &mut Frame, app: &App) {
     // Outer layout: header + body + footer
     let vertical = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(0),
+            Constraint::Length(3),
+        ])
         .split(total_area);
 
     let header_area = vertical[0];
@@ -190,12 +192,9 @@ fn render_panel(
     gate: Option<f64>,
     chunks: std::rc::Rc<[Rect]>,
 ) {
-    let sidebar = Paragraph::new(format!(
-        "Sidebar\nwidth: {}",
-        sidebar_width
-    ))
-    .block(Block::default().title("Sidebar").borders(Borders::ALL))
-    .alignment(Alignment::Center);
+    let sidebar = Paragraph::new(format!("Sidebar\nwidth: {}", sidebar_width))
+        .block(Block::default().title("Sidebar").borders(Borders::ALL))
+        .alignment(Alignment::Center);
 
     let mut main_text = vec![
         Line::from(format!("Engine: {}", title)),
