@@ -154,7 +154,12 @@ impl StatefulWidget for Button<'_> {
 
         if area.height > 2 {
             let top = "▔".repeat(area.width as usize);
-            buf.set_string(area.x, area.y, &top, Style::new().fg(highlight).bg(background));
+            buf.set_string(
+                area.x,
+                area.y,
+                &top,
+                Style::new().fg(highlight).bg(background),
+            );
         }
 
         if area.height > 1 {
@@ -176,10 +181,7 @@ impl StatefulWidget for Button<'_> {
 
 /// Check whether a mouse position is inside a rectangle.
 pub fn is_mouse_over(area: Rect, column: u16, row: u16) -> bool {
-    area.x <= column
-        && column < area.x + area.width
-        && area.y <= row
-        && row < area.y + area.height
+    area.x <= column && column < area.x + area.width && area.y <= row && row < area.y + area.height
 }
 
 /// Enable crossterm mouse capture.
