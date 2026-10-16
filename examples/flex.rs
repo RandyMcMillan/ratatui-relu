@@ -7,6 +7,7 @@
 use std::io::{self, stdout, Stdout};
 use std::num::NonZeroUsize;
 use std::sync::LazyLock;
+use std::time::Instant;
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
@@ -28,6 +29,7 @@ use ratatui::{
     },
     Terminal,
 };
+use ratatui_relu::animation::Transition;
 use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
 
 fn setup_terminal() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
@@ -138,11 +140,13 @@ const EXAMPLE_DATA: &[(&str, &[Constraint])] = &[
     ),
 ];
 
-#[derive(Default, Clone, Copy)]
+const ANIMATION_SPEED: f64 = 40.0;
+
+#[derive(Clone, Copy)]
 struct App {
     selected_tab: SelectedTab,
     scroll_offset: u16,
-    spacing: u16,
+    spacing: Transition,
     state: AppState,
 }
 
@@ -174,21 +178,32 @@ enum SelectedTab {
     SpaceBetween,
 }
 
-impl App {
-    fn new() -> Self {
+impl Default for App {
+    fn default() -> Self {
         Self {
             selected_tab: SelectedTab::default(),
             scroll_offset: 0,
-            spacing: 0,
+            spacing: Transition::new(0.0, ANIMATION_SPEED),
             state: AppState::default(),
         }
+    }
+}
+
+impl App {
+    fn new() -> Self {
+        Self::default()
     }
 
     fn run(&mut self, terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
         let cache_size = EXAMPLE_DATA.len() * SelectedTab::iter().len() * 100;
         Layout::init_cache(NonZeroUsize::new(cache_size).unwrap());
 
+        let mut last_tick = Instant::now();
         while self.is_running() {
+            let now = Instant::now();
+            self.spacing.update(now - last_tick);
+            last_tick = now;
+
             terminal.draw(|frame| frame.render_widget(*self, frame.area()))?;
             self.handle_events()?;
         }
@@ -247,12 +262,12 @@ impl App {
         self.scroll_offset = max_scroll_offset();
     }
 
-    const fn increment_spacing(&mut self) {
-        self.spacing = self.spacing.saturating_add(1);
+    fn increment_spacing(&mut self) {
+        self.spacing.set_target(self.spacing.target() + 1.0);
     }
 
-    const fn decrement_spacing(&mut self) {
-        self.spacing = self.spacing.saturating_sub(1);
+    fn decrement_spacing(&mut self) {
+        self.spacing.set_target(self.spacing.target() - 1.0);
     }
 
     const fn quit(&mut self) {
@@ -289,7 +304,7 @@ impl Widget for App {
         } else {
             axis.width
         };
-        Self::axis(axis_width, self.spacing).render(axis, buf);
+        Self::axis(axis_width, self.spacing.current() as u16).render(axis, buf);
     }
 }
 
@@ -334,7 +349,7 @@ impl App {
             demo_area
         };
 
-        let mut spacing = self.spacing;
+        let mut spacing = self.spacing.current() as u16;
         self.selected_tab
             .render(content_area, &mut demo_buf, &mut spacing);
 
