@@ -1,0 +1,11 @@
+[package]
+name = "ratatui-relu-sys"
+version = "0.3.0"
+edition = "2024"
+
+[lib]
+name = "ratatui_relu_sys"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+ratatui-relu = { path = ".." }
