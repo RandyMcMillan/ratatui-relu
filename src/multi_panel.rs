@@ -477,6 +477,7 @@ fn help_text() -> Text<'static> {
 
     for (key, action) in rows {
         lines.push(Line::from(vec![
+            Span::raw("  "),
             Span::styled(format!("{:>12}", key), Style::default().fg(Color::Yellow)),
             Span::raw("  "),
             Span::styled(action, Style::default().fg(Color::White)),
