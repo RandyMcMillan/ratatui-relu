@@ -30,24 +30,26 @@ pub struct MultiPanelState {
 }
 
 impl MultiPanelState {
+    /// Create a new state. Use `open = true` to start all panels open,
+    /// `open = false` to start them closed.
+    pub fn new(open: bool, speed: f64) -> Self {
+        let value = if open { 1.0 } else { 0.0 };
+        Self {
+            header: Transition::new(value, speed),
+            left_sidebar: Transition::new(value, speed),
+            right_sidebar: Transition::new(value, speed),
+            footer: Transition::new(value, speed),
+        }
+    }
+
     /// Create a new state with all panels open.
     pub fn open(speed: f64) -> Self {
-        Self {
-            header: Transition::new(1.0, speed),
-            left_sidebar: Transition::new(1.0, speed),
-            right_sidebar: Transition::new(1.0, speed),
-            footer: Transition::new(1.0, speed),
-        }
+        Self::new(true, speed)
     }
 
     /// Create a new state with all panels closed.
     pub fn closed(speed: f64) -> Self {
-        Self {
-            header: Transition::new(0.0, speed),
-            left_sidebar: Transition::new(0.0, speed),
-            right_sidebar: Transition::new(0.0, speed),
-            footer: Transition::new(0.0, speed),
-        }
+        Self::new(false, speed)
     }
 
     /// Advance all panel transitions by `dt`.
