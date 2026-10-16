@@ -4,15 +4,15 @@
 //!
 //! Run in a real terminal with: cargo run --example multi_panel
 
-use std::io::{self, stdout, Stdout};
+use std::io::{self, Stdout, stdout};
 use std::time::Instant;
 
 use crossterm::{
-    event::{self, Event, KeyEventKind},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
+    event::{self, Event, KeyEventKind},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 
 use ratatui_relu::multi_panel::MultiPanelApp;
 
@@ -56,8 +56,11 @@ fn run_app(
             && let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
         {
-            app.handle_key(key.code);
-            if matches!(key.code, crossterm::event::KeyCode::Char('q') | crossterm::event::KeyCode::Esc) {
+            app.handle_key_event(key);
+            if matches!(
+                key.code,
+                crossterm::event::KeyCode::Char('q') | crossterm::event::KeyCode::Esc
+            ) {
                 break;
             }
             // Repaint immediately after a key press so state changes (like

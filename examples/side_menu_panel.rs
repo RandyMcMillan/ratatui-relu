@@ -5,21 +5,21 @@
 //!
 //! Run in a real terminal with: cargo run --example side_menu_panel
 
-use std::io::{self, stdout, Stdout};
+use std::io::{self, Stdout, stdout};
 use std::time::{Duration, Instant};
 
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
+    event::{self, Event, KeyCode, KeyEventKind},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
+    Frame, Terminal,
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph},
-    Frame, Terminal,
 };
 
 use ratatui_relu::animation::Transition;
@@ -104,15 +104,17 @@ fn ui(f: &mut Frame, app: &App) {
             Span::raw("Side Menu Panel Demo | sidebar: "),
             Span::styled(
                 format!("{:.1}", current),
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::raw(format!(" | gate: {:.3}", gate)),
         ]),
         Line::from("Press [Space], [←], or [→] to toggle the side menu. [q] or [Esc] to quit."),
     ]);
 
-    let header = Paragraph::new(text)
-        .block(Block::default().title("Side Menu").borders(Borders::ALL));
+    let header =
+        Paragraph::new(text).block(Block::default().title("Side Menu").borders(Borders::ALL));
 
     let vertical = Layout::default()
         .direction(Direction::Vertical)
@@ -123,10 +125,7 @@ fn ui(f: &mut Frame, app: &App) {
 
     let horizontal = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(layout.sidebar_width),
-            Constraint::Min(0),
-        ])
+        .constraints([Constraint::Length(layout.sidebar_width), Constraint::Min(0)])
         .split(vertical[1]);
 
     let sidebar = Paragraph::new(format!("Menu\n{} cols", layout.sidebar_width))
