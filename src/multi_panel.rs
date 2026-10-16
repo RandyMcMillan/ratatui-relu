@@ -113,10 +113,10 @@ impl MultiPanelState {
     }
 
     /// Current main content width in columns for the given total width.
-    pub fn main_width(&self, total_width: u16, fraction: f64) -> u16 {
+    pub fn main_width(&self, total_width: u16, left_fraction: f64, right_fraction: f64) -> u16 {
         total_width
-            .saturating_sub(self.left_sidebar_width(total_width, fraction))
-            .saturating_sub(self.right_sidebar_width(total_width, fraction))
+            .saturating_sub(self.left_sidebar_width(total_width, left_fraction))
+            .saturating_sub(self.right_sidebar_width(total_width, right_fraction))
     }
 }
 
@@ -149,8 +149,10 @@ pub struct MultiPanel {
     pub main_color: Color,
     /// Height of the header/footer when fully open, in rows.
     pub panel_height: u16,
-    /// Width of each sidebar as a fraction of total width (0.0–1.0).
-    pub sidebar_width_fraction: f64,
+    /// Width of the left sidebar as a fraction of total width (0.0–1.0).
+    pub left_sidebar_width_fraction: f64,
+    /// Width of the right sidebar as a fraction of total width (0.0–1.0).
+    pub right_sidebar_width_fraction: f64,
 }
 
 impl MultiPanel {
@@ -173,7 +175,8 @@ impl MultiPanel {
             footer_color: Color::Yellow,
             main_color: Color::Reset,
             panel_height: 5,
-            sidebar_width_fraction: 0.25,
+            left_sidebar_width_fraction: 0.25,
+            right_sidebar_width_fraction: 0.25,
         }
     }
 
@@ -258,9 +261,23 @@ impl MultiPanel {
         self
     }
 
-    /// Builder-style setter for sidebar width fraction.
+    /// Builder-style setter for both sidebar width fractions.
     pub fn sidebar_width_fraction(mut self, fraction: f64) -> Self {
-        self.sidebar_width_fraction = fraction.clamp(0.0, 1.0);
+        let fraction = fraction.clamp(0.0, 1.0);
+        self.left_sidebar_width_fraction = fraction;
+        self.right_sidebar_width_fraction = fraction;
+        self
+    }
+
+    /// Builder-style setter for left sidebar width fraction.
+    pub fn left_sidebar_width_fraction(mut self, fraction: f64) -> Self {
+        self.left_sidebar_width_fraction = fraction.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Builder-style setter for right sidebar width fraction.
+    pub fn right_sidebar_width_fraction(mut self, fraction: f64) -> Self {
+        self.right_sidebar_width_fraction = fraction.clamp(0.0, 1.0);
         self
     }
 
@@ -301,8 +318,8 @@ impl StatefulWidget for MultiPanel {
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let header_height = (state.header.current() * self.panel_height as f64).round() as u16;
         let footer_height = (state.footer.current() * self.panel_height as f64).round() as u16;
-        let left_width = (state.left_sidebar.current() * area.width as f64 * self.sidebar_width_fraction).round() as u16;
-        let right_width = (state.right_sidebar.current() * area.width as f64 * self.sidebar_width_fraction).round() as u16;
+        let left_width = (state.left_sidebar.current() * area.width as f64 * self.left_sidebar_width_fraction).round() as u16;
+        let right_width = (state.right_sidebar.current() * area.width as f64 * self.right_sidebar_width_fraction).round() as u16;
 
         let vertical = Layout::default()
             .direction(Direction::Vertical)

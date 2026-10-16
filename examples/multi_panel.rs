@@ -23,6 +23,7 @@ use ratarelu::multi_panel::{MultiPanel, MultiPanelState};
 
 struct App {
     state: MultiPanelState,
+    right_boost: bool,
     should_quit: bool,
 }
 
@@ -32,12 +33,21 @@ impl App {
         let state = MultiPanelState::load().unwrap_or_else(|| MultiPanelState::open(4.0));
         Self {
             state,
+            right_boost: false,
             should_quit: false,
         }
     }
 
     fn update(&mut self, dt: Duration) {
         self.state.update(dt);
+    }
+
+    fn right_sidebar_fraction(&self) -> f64 {
+        if self.right_boost {
+            0.50
+        } else {
+            0.25
+        }
     }
 }
 
@@ -103,7 +113,12 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> i
                     }
                 }
                 KeyCode::Left => {
-                    if app.state.left_sidebar.current() < 0.5 {
+                    let left_closed = app.state.left_sidebar.current() < 0.5;
+                    let right_open = app.state.right_sidebar.current() > 0.5;
+                    if left_closed && right_open {
+                        // Left is closed and right is open: double the right panel width.
+                        app.right_boost = !app.right_boost;
+                    } else if left_closed {
                         app.state.right_sidebar.set_target(1.0);
                     } else {
                         app.state.left_sidebar.toggle_between(0.0, 1.0);
@@ -144,7 +159,8 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
             ratatui::widgets::Widget::render(p, area, buf);
         })
         .main_content(|state, area, buf| {
-            let fraction = 0.25;
+            let left_fraction = 0.25;
+            let right_fraction = app.right_sidebar_fraction();
 
             // Split the main area into a 3x3 grid of sub-widgets.
             let rows = ratatui::layout::Layout::default()
@@ -205,14 +221,14 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
 
             subwidget(
                 "Left",
-                format!("{} cols", state.left_sidebar_width(area.width, fraction)),
+                format!("{} cols", state.left_sidebar_width(area.width, left_fraction)),
                 cols_mid[0],
                 buf,
             );
             subwidget("Center", format!("{}x{}", area.width, area.height), cols_mid[1], buf);
             subwidget(
                 "Right",
-                format!("{} cols", state.right_sidebar_width(area.width, fraction)),
+                format!("{} cols", state.right_sidebar_width(area.width, right_fraction)),
                 cols_mid[2],
                 buf,
             );
@@ -243,7 +259,8 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
         .footer_color(Color::Yellow)
         .main_color(Color::Reset)
         .panel_height(5)
-        .sidebar_width_fraction(0.25);
+        .left_sidebar_width_fraction(0.25)
+        .right_sidebar_width_fraction(app.right_sidebar_fraction());
 
     f.render_stateful_widget(widget, area, &mut app.state);
 }
