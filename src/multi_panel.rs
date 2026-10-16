@@ -682,6 +682,7 @@ impl MultiPanelApp {
     /// Handle a key press (real or simulated).
     pub fn handle_key(&mut self, code: KeyCode) {
         match code {
+            // T = Test Mode
             KeyCode::Char('T') => {
                 if self.test_mode.is_some() {
                     self.stop_test_mode();
@@ -689,13 +690,16 @@ impl MultiPanelApp {
                     self.start_test_mode();
                 }
             }
-            KeyCode::Char('H') => self.show_grid = !self.show_grid,
-            KeyCode::Char('h') => self.state.header.toggle_between(0.0, 1.0),
+            // G = Grid Mode
+            KeyCode::Char('G') => self.show_grid = !self.show_grid,
+            // t = top
+            KeyCode::Char('t') => self.state.header.toggle_between(0.0, 1.0),
             KeyCode::Char('l') => self.state.left_sidebar.toggle_between(0.0, 1.0),
             KeyCode::Char('r') => self.state.right_sidebar.toggle_between(0.0, 1.0),
             KeyCode::Char('f') => self.state.footer.toggle_between(0.0, 1.0),
             KeyCode::Char(' ') => self.state.toggle_all(),
-            KeyCode::Char('\\') => self.show_help = !self.show_help,
+            // right handed                 // left handed
+            KeyCode::Char('\\') | KeyCode::Char('q') => self.show_help = !self.show_help,
             KeyCode::Up => {
                 let top_closed = self.state.header.target() < 0.5;
                 let bottom_open = self.state.footer.target() > 0.5;
@@ -751,9 +755,11 @@ impl MultiPanelApp {
     pub fn handle_key_event(&mut self, key: crossterm::event::KeyEvent) {
         use crossterm::event::KeyModifiers;
         match (key.code, key.modifiers) {
-            (KeyCode::Char('h'), m) if m.contains(KeyModifiers::SHIFT) => {
+            // Grid Mode
+            (KeyCode::Char('g'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_grid = !self.show_grid;
             }
+            // Test Mode
             (KeyCode::Char('t'), m) if m.contains(KeyModifiers::SHIFT) => {
                 if self.test_mode.is_some() {
                     self.stop_test_mode();
