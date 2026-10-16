@@ -450,6 +450,16 @@ fn render_panel(
 /// Keys simulated during test mode.
 pub const TEST_KEYS: [KeyCode; 4] = [KeyCode::Left, KeyCode::Right, KeyCode::Up, KeyCode::Down];
 
+const HELP_TEXT: &str = "ratatui-relu shortcuts\n\n\
+    h/l/r/f     toggle header / left / right / footer\n\
+    Space       toggle all panels\n\
+    ↑ / ↓       close top / bottom and boost opposite\n\
+    ← / →       close side and boost opposite\n\
+    Shift+H     hide / show inner grid\n\
+    Shift+T     start / stop automated test matrix\n\
+    \\           toggle this help overlay\n\
+    q / Esc     quit";
+
 // State bit indices for matrix operations.
 // Panel bits:
 const BIT_HEADER: u8 = 0;
@@ -506,6 +516,9 @@ pub struct MultiPanelApp {
     /// Whether the inner neighbor-report grid is visible.
     #[serde(skip)]
     pub show_grid: bool,
+    /// Whether the full-screen help overlay is visible.
+    #[serde(skip)]
+    pub show_help: bool,
     #[serde(skip)]
     pub test_mode: Option<TestMode>,
     #[serde(skip)]
@@ -573,6 +586,7 @@ impl MultiPanelApp {
             top_boost: true,
             bottom_boost: true,
             show_grid: true,
+            show_help: false,
             test_mode: None,
             config,
         }
@@ -675,17 +689,13 @@ impl MultiPanelApp {
                     self.start_test_mode();
                 }
             }
-            KeyCode::Char('H') => {
-                self.show_grid = !self.show_grid;
-                if self.test_mode.is_some() {
-                } else {
-                }
-            }
+            KeyCode::Char('H') => self.show_grid = !self.show_grid,
             KeyCode::Char('h') => self.state.header.toggle_between(0.0, 1.0),
             KeyCode::Char('l') => self.state.left_sidebar.toggle_between(0.0, 1.0),
             KeyCode::Char('r') => self.state.right_sidebar.toggle_between(0.0, 1.0),
             KeyCode::Char('f') => self.state.footer.toggle_between(0.0, 1.0),
             KeyCode::Char(' ') => self.state.toggle_all(),
+            KeyCode::Char('\\') => self.show_help = !self.show_help,
             KeyCode::Up => {
                 let top_closed = self.state.header.target() < 0.5;
                 let bottom_open = self.state.footer.target() > 0.5;
@@ -759,6 +769,12 @@ impl MultiPanelApp {
     pub fn render(&mut self, f: &mut Frame) {
         let widget = (self.config.widget_builder)(self);
         f.render_stateful_widget(widget, f.area(), &mut self.state);
+        if self.show_help {
+            let help = Paragraph::new(HELP_TEXT)
+                .alignment(Alignment::Center)
+                .block(Block::default().title("Help").borders(Borders::ALL));
+            f.render_widget(help, f.area());
+        }
     }
 
     /// Current left sidebar width fraction, including boost.
@@ -811,7 +827,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             bits
         )
     });
-    let help = "[h/l/r/f] toggle  [Space] all  [↑↓←→] boost  [Shift+H] hide grid  [Shift+T] test  [q] quit";
+    let help = "[h/l/r/f] toggle  [Space] all  [↑↓←→] boost  [Shift+H] hide grid  [Shift+T] test  [\\] help  [q] quit";
 
     MultiPanel::new()
         .header_title("Header")
