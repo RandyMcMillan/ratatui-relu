@@ -452,15 +452,6 @@ pub const TEST_KEYS: [KeyCode; 4] = [KeyCode::Left, KeyCode::Right, KeyCode::Up,
 
 fn help_text() -> Text<'static> {
     let mut lines = Vec::new();
-    lines.push(
-        Line::from(
-            "ratatui-relu shortcuts"
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-        .centered(),
-    );
-    lines.push(Line::default());
 
     let rows = [
         ("h / l / r / f", "toggle header / left / right / footer"),
@@ -1064,9 +1055,7 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
             Widget::render(p, area, buf);
         })
         .main_content(|_state, area, buf| {
-            let p = Paragraph::new(help_text())
-                .alignment(Alignment::Left)
-                .block(Block::default().borders(Borders::ALL));
+            let p = Paragraph::new(help_text()).alignment(Alignment::Left);
             Widget::render(p, area, buf);
         })
         .footer_content(|_state, area, buf| {
