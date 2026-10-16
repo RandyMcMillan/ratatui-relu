@@ -129,6 +129,71 @@ fn rgb(color: Color) -> (f64, f64, f64) {
     }
 }
 
+/// Smoothly animates a transparency/alpha value between two colors.
+///
+/// The output is an opaque RGB color blended from `background` (alpha 0.0)
+/// to `foreground` (alpha 1.0). This is useful for fade-in/fade-out effects
+/// in terminals that don't support true alpha.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AlphaTransition {
+    transition: Transition,
+}
+
+impl AlphaTransition {
+    /// Create a new alpha transition. `initial` is 0.0 (background) to 1.0
+    /// (foreground).
+    pub fn new(initial: f64, speed: f64) -> Self {
+        Self {
+            transition: Transition::new(initial.clamp(0.0, 1.0), speed),
+        }
+    }
+
+    /// Set the target alpha, clamped to `[0.0, 1.0]`.
+    pub fn set_target(&mut self, alpha: f64) {
+        self.transition.set_target(alpha.clamp(0.0, 1.0));
+    }
+
+    /// Advance the alpha transition by `dt`.
+    pub fn update(&mut self, dt: Duration) {
+        self.transition.update(dt);
+    }
+
+    /// The current alpha value in `[0.0, 1.0]`.
+    pub fn alpha(&self) -> f64 {
+        self.transition.current().clamp(0.0, 1.0)
+    }
+
+    /// Blend `foreground` and `background` using the current alpha.
+    ///
+    /// Alpha 0.0 returns `background`; alpha 1.0 returns `foreground`.
+    pub fn blend(&self, foreground: Color, background: Color) -> Color {
+        blend(background, foreground, self.alpha())
+    }
+
+    /// Returns `true` when the alpha has reached the target.
+    pub fn is_done(&self) -> bool {
+        self.transition.is_done()
+    }
+}
+
+/// Linearly blend between two RGB colors.
+///
+/// `t = 0.0` returns `a`, `t = 1.0` returns `b`.
+pub fn blend(a: Color, b: Color, t: f64) -> Color {
+    let (ar, ag, ab) = rgb(a);
+    let (br, bg, bb) = rgb(b);
+    let t = t.clamp(0.0, 1.0);
+    Color::Rgb(
+        lerp(ar, br, t) as u8,
+        lerp(ag, bg, t) as u8,
+        lerp(ab, bb, t) as u8,
+    )
+}
+
+fn lerp(a: f64, b: f64, t: f64) -> f64 {
+    a + (b - a) * t
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -170,5 +235,21 @@ mod tests {
         ct.update(Duration::from_secs(10));
         assert_eq!(ct.current(), Color::Rgb(100, 200, 50));
         assert!(ct.is_done());
+    }
+
+    #[test]
+    fn alpha_transition_fades() {
+        let mut at = AlphaTransition::new(0.0, 2.0);
+        at.set_target(1.0);
+        at.update(Duration::from_millis(200));
+        let color = at.blend(Color::Rgb(255, 0, 0), Color::Rgb(0, 0, 0));
+        assert!(matches!(color, Color::Rgb(r, 0, 0) if r > 0 && r < 255));
+        at.update(Duration::from_secs(10));
+        assert_eq!(at.blend(Color::Rgb(255, 0, 0), Color::Rgb(0, 0, 0)), Color::Rgb(255, 0, 0));
+    }
+
+    #[test]
+    fn blend_black_to_white() {
+        assert_eq!(blend(Color::Rgb(0, 0, 0), Color::Rgb(255, 255, 255), 0.5), Color::Rgb(127, 127, 127));
     }
 }
