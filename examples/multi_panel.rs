@@ -126,6 +126,27 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
         .right_title("Right")
         .main_title("Main")
         .footer_title("Footer")
+        .main_content(|state, area, buf| {
+            let fraction = 0.25;
+            let left = state.left_sidebar_width(area.width, fraction);
+            let right = state.right_sidebar_width(area.width, fraction);
+            let main = state.main_width(area.width, fraction);
+            let top = state.header_height(5);
+            let bottom = state.footer_height(5);
+
+            let lines = [
+                "Main area reporting neighbor states:".to_string(),
+                String::new(),
+                format!("  left  sidebar: {:>3} cols", left),
+                format!("  right sidebar: {:>3} cols", right),
+                format!("  main width:    {:>3} cols", main),
+                format!("  top/header:    {:>3} rows", top),
+                format!("  bottom/footer: {:>3} rows", bottom),
+            ];
+            let p = ratatui::widgets::Paragraph::new(lines.join("\n"))
+                .alignment(ratatui::layout::Alignment::Center);
+            ratatui::widgets::Widget::render(p, area, buf);
+        })
         .footer_content(move |_state, area, buf| {
             let p = ratatui::widgets::Paragraph::new(help).alignment(ratatui::layout::Alignment::Center);
             ratatui::widgets::Widget::render(p, area, buf);
