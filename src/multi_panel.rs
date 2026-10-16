@@ -452,9 +452,41 @@ const BIT_BOTTOM_BOOST: u8 = 5;
 const BIT_LEFT_BOOST: u8 = 6;
 const BIT_RIGHT_BOOST: u8 = 7;
 
+/// Configuration for [`MultiPanelApp`].
+///
+/// Lets callers supply their own [`MultiPanel`] widget builder and choose where
+/// state is persisted.
+pub struct MultiPanelAppConfig {
+    /// Builder that produces the [`MultiPanel`] widget used for rendering.
+    ///
+    /// The builder receives the app so it can react to boost flags and test
+    /// mode. A fresh widget is built each frame because Ratatui widgets are
+    /// consumed when rendered.
+    pub widget_builder: Box<dyn Fn(&MultiPanelApp) -> MultiPanel>,
+    /// Optional path for `load`/`save`. If `None`, the default config directory
+    /// is used.
+    pub save_path: Option<std::path::PathBuf>,
+}
+
+impl Default for MultiPanelAppConfig {
+    fn default() -> Self {
+        Self::demo()
+    }
+}
+
+impl MultiPanelAppConfig {
+    /// Create a config with the built-in demo layout.
+    pub fn demo() -> Self {
+        Self {
+            widget_builder: Box::new(demo_widget_builder),
+            save_path: None,
+        }
+    }
+}
+
 /// Full mutable application state for a multi-panel TUI, including boost flags
 /// and an optional automated test mode.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct MultiPanelApp {
     pub state: MultiPanelState,
     pub left_boost: bool,
@@ -462,6 +494,22 @@ pub struct MultiPanelApp {
     pub top_boost: bool,
     pub bottom_boost: bool,
     pub test_mode: Option<TestMode>,
+    #[serde(skip)]
+    pub config: MultiPanelAppConfig,
+}
+
+impl std::fmt::Debug for MultiPanelApp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MultiPanelApp")
+            .field("state", &self.state)
+            .field("left_boost", &self.left_boost)
+            .field("right_boost", &self.right_boost)
+            .field("top_boost", &self.top_boost)
+            .field("bottom_boost", &self.bottom_boost)
+            .field("test_mode", &self.test_mode)
+            .field("config", &"<MultiPanelAppConfig>")
+            .finish()
+    }
 }
 
 /// Automated test mode state.
@@ -479,13 +527,28 @@ impl Default for MultiPanelApp {
 }
 
 impl MultiPanelApp {
-    /// Create a new app. Tries to load persisted state; falls back to all open.
+    /// Create a new app with the demo config. Tries to load persisted state;
+    /// falls back to all panels open.
     pub fn new() -> Self {
-        Self::load().unwrap_or_else(|| Self::from_state(MultiPanelState::open(4.0)))
+        Self::with_config(MultiPanelAppConfig::demo())
     }
 
-    /// Create an app from an existing panel state.
+    /// Create a new app with a custom config.
+    pub fn with_config(config: MultiPanelAppConfig) -> Self {
+        let path = config.save_path.clone().or_else(Self::default_config_path);
+        let state = path
+            .and_then(|p| load_from_path(&p).ok())
+            .unwrap_or_else(|| MultiPanelState::open(4.0));
+        Self::from_state_with_config(state, config)
+    }
+
+    /// Create an app from an existing panel state and the demo config.
     pub fn from_state(state: MultiPanelState) -> Self {
+        Self::from_state_with_config(state, MultiPanelAppConfig::demo())
+    }
+
+    /// Create an app from an existing panel state and a custom config.
+    pub fn from_state_with_config(state: MultiPanelState, config: MultiPanelAppConfig) -> Self {
         Self {
             state,
             left_boost: false,
@@ -493,33 +556,38 @@ impl MultiPanelApp {
             top_boost: false,
             bottom_boost: false,
             test_mode: None,
+            config,
         }
     }
 
-    /// Load app state from disk, including boost flags.
-    pub fn load() -> Option<Self> {
-        let path = Self::config_path()?;
+    /// Load app state from the configured path, or the default location.
+    pub fn load(&self) -> Option<Self> {
+        let path = self.config.save_path.clone().or_else(Self::default_config_path)?;
         let bytes = std::fs::read(&path).ok()?;
-        serde_json::from_slice(&bytes).ok()
+        let mut app: Self = serde_json::from_slice(&bytes).ok()?;
+        app.config.save_path = self.config.save_path.clone();
+        Some(app)
     }
 
-    /// Save app state to disk, including boost flags.
+    /// Save app state to the configured path, or the default location.
     pub fn save(&self) -> std::io::Result<()> {
-        let path = Self::config_path().ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "could not determine config directory",
-            )
-        })?;
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(&path, serde_json::to_vec_pretty(self)?)
+        let path = self
+            .config
+            .save_path
+            .clone()
+            .or_else(Self::default_config_path)
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "could not determine config directory",
+                )
+            })?;
+        save_to_path(self, &path)
     }
 
-    /// Path to the default state file.
-    pub fn config_path() -> Option<std::path::PathBuf> {
-        dirs::config_dir().map(|d| d.join("ratarelu").join("multi_panel_app.json"))
+    /// Default state file path: `~/.config/ratatui-relu/multi_panel_app.json`.
+    pub fn default_config_path() -> Option<std::path::PathBuf> {
+        dirs::config_dir().map(|d| d.join("ratatui-relu").join("multi_panel_app.json"))
     }
 
     /// Advance animations and automated test mode.
@@ -568,7 +636,7 @@ impl MultiPanelApp {
     }
 
     /// Handle a key press (real or simulated).
-    pub fn handle_key(&mut self, code: crossterm::event::KeyCode) {
+    pub fn handle_key(&mut self, code: KeyCode) {
         match code {
             KeyCode::Char('T') => {
                 if self.test_mode.is_some() {
@@ -630,89 +698,107 @@ impl MultiPanelApp {
         }
     }
 
-    /// Render the app into the given frame using the default demo layout.
+    /// Render the app into the given frame using the configured widget builder.
     pub fn render(&mut self, f: &mut Frame) {
-        let area = f.area();
-        let left_fraction = self.left_sidebar_fraction();
-        let right_fraction = self.right_sidebar_fraction();
-        let header_height = self.header_height();
-        let footer_height = self.footer_height();
-        let test_label = self.test_mode.as_ref().map(|t| {
-            let bits = state_bits(self);
-            format!(
-                "TEST MODE state {}/256 key {}/{} bits {:08b}",
-                t.state + 1,
-                t.step + 1,
-                TEST_KEYS.len(),
-                bits
-            )
-        });
-
-        let help = "[h/l/r/f] toggle  [Space] all  [↑] close top + boost bottom  [↓] close bottom + boost top  [←] close left + boost right  [→] close right + boost left  [Shift+T] test  [q] quit";
-
-        let widget = MultiPanel::new()
-            .header_title("Header")
-            .left_title("Left")
-            .right_title("Right")
-            .main_title("Main")
-            .footer_title("Footer")
-            .header_content(move |_state, area, buf| {
-                let top = Rect::new(area.x, area.y, area.width, 1.min(area.height));
-                let text = test_label.clone().unwrap_or_else(|| "↑ top".to_string());
-                let p = Paragraph::new(text).alignment(Alignment::Center);
-                Widget::render(p, top, buf);
-            })
-            .left_content(|_state, area, buf| {
-                let p = Paragraph::new("← left").alignment(Alignment::Left);
-                Widget::render(p, area, buf);
-            })
-            .right_content(|_state, area, buf| {
-                let p = Paragraph::new("right →").alignment(Alignment::Right);
-                Widget::render(p, area, buf);
-            })
-            .main_content(move |state, area, buf| {
-                use crate::report_grid::NeighborReportGrid;
-                let grid = NeighborReportGrid::new(left_fraction, right_fraction, header_height, footer_height);
-                StatefulWidget::render(grid, area, buf, state);
-            })
-            .footer_content(move |_state, area, buf| {
-                let bottom = Rect::new(
-                    area.x,
-                    area.y + area.height.saturating_sub(1),
-                    area.width,
-                    1.min(area.height),
-                );
-                let p = Paragraph::new(help).alignment(Alignment::Center);
-                Widget::render(p, bottom, buf);
-            })
-            .header_color(Color::Blue)
-            .left_color(Color::Green)
-            .right_color(Color::Magenta)
-            .footer_color(Color::Yellow)
-            .main_color(Color::Reset)
-            .header_height(header_height)
-            .footer_height(footer_height)
-            .left_sidebar_width_fraction(left_fraction)
-            .right_sidebar_width_fraction(right_fraction);
-
-        f.render_stateful_widget(widget, area, &mut self.state);
+        let widget = (self.config.widget_builder)(self);
+        f.render_stateful_widget(widget, f.area(), &mut self.state);
     }
 
-    fn left_sidebar_fraction(&self) -> f64 {
+    /// Current left sidebar width fraction, including boost.
+    pub fn left_sidebar_fraction(&self) -> f64 {
         if self.left_boost { 0.50 } else { 0.25 }
     }
 
-    fn right_sidebar_fraction(&self) -> f64 {
+    /// Current right sidebar width fraction, including boost.
+    pub fn right_sidebar_fraction(&self) -> f64 {
         if self.right_boost { 0.50 } else { 0.25 }
     }
 
-    fn header_height(&self) -> u16 {
+    /// Current header height, including boost.
+    pub fn header_height(&self) -> u16 {
         if self.top_boost { 10 } else { 5 }
     }
 
-    fn footer_height(&self) -> u16 {
+    /// Current footer height, including boost.
+    pub fn footer_height(&self) -> u16 {
         if self.bottom_boost { 10 } else { 5 }
     }
+}
+
+fn load_from_path(path: &std::path::Path) -> std::io::Result<MultiPanelState> {
+    let bytes = std::fs::read(path)?;
+    serde_json::from_slice(&bytes).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+}
+
+fn save_to_path(app: &MultiPanelApp, path: &std::path::Path) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, serde_json::to_vec_pretty(app)?)
+}
+
+/// The built-in demo widget builder used by [`MultiPanelAppConfig::demo`].
+pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
+    let left_fraction = app.left_sidebar_fraction();
+    let right_fraction = app.right_sidebar_fraction();
+    let header_height = app.header_height();
+    let footer_height = app.footer_height();
+    let test_label = app.test_mode.as_ref().map(|t| {
+        let bits = state_bits(app);
+        format!(
+            "TEST MODE state {}/256 key {}/{} bits {:08b}",
+            t.state + 1,
+            t.step + 1,
+            TEST_KEYS.len(),
+            bits
+        )
+    });
+    let help = "[h/l/r/f] toggle  [Space] all  [↑] close top + boost bottom  [↓] close bottom + boost top  [←] close left + boost right  [→] close right + boost left  [Shift+T] test  [q] quit";
+
+    MultiPanel::new()
+        .header_title("Header")
+        .left_title("Left")
+        .right_title("Right")
+        .main_title("Main")
+        .footer_title("Footer")
+        .header_content(move |_state, area, buf| {
+            let top = Rect::new(area.x, area.y, area.width, 1.min(area.height));
+            let text = test_label.clone().unwrap_or_else(|| "↑ top".to_string());
+            let p = Paragraph::new(text).alignment(Alignment::Center);
+            Widget::render(p, top, buf);
+        })
+        .left_content(|_state, area, buf| {
+            let p = Paragraph::new("← left").alignment(Alignment::Left);
+            Widget::render(p, area, buf);
+        })
+        .right_content(|_state, area, buf| {
+            let p = Paragraph::new("right →").alignment(Alignment::Right);
+            Widget::render(p, area, buf);
+        })
+        .main_content(move |state, area, buf| {
+            use crate::report_grid::NeighborReportGrid;
+            let grid = NeighborReportGrid::new(left_fraction, right_fraction, header_height, footer_height);
+            StatefulWidget::render(grid, area, buf, state);
+        })
+        .footer_content(move |_state, area, buf| {
+            let bottom = Rect::new(
+                area.x,
+                area.y + area.height.saturating_sub(1),
+                area.width,
+                1.min(area.height),
+            );
+            let p = Paragraph::new(help).alignment(Alignment::Center);
+            Widget::render(p, bottom, buf);
+        })
+        .header_color(Color::Blue)
+        .left_color(Color::Green)
+        .right_color(Color::Magenta)
+        .footer_color(Color::Yellow)
+        .main_color(Color::Reset)
+        .header_height(header_height)
+        .footer_height(footer_height)
+        .left_sidebar_width_fraction(left_fraction)
+        .right_sidebar_width_fraction(right_fraction)
 }
 
 /// Encode panel targets and boost flags into an 8-bit state vector.
