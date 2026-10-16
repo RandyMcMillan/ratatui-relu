@@ -1054,18 +1054,12 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
             Widget::render(p, area, buf);
         })
         .left_content(|_state, area, buf| {
-            let text = "ReLU-gated layout transitions\n\
-                Smooth animations\n\
-                Multi-panel widget\n\
-                FFI bindings";
+            let text = "  ReLU-gated layout transitions\n  Smooth animations\n  Multi-panel widget\n  FFI bindings";
             let p = Paragraph::new(text).alignment(Alignment::Left);
             Widget::render(p, area, buf);
         })
         .right_content(|_state, area, buf| {
-            let text = "Try Shift+T for test mode\n\
-                Try Shift+C for colors\n\
-                Try Shift+M for charts\n\
-                Try Shift+H to hide grid";
+            let text = "  Try Shift+T for test mode\n  Try Shift+C for colors\n  Try Shift+M for charts\n  Try Shift+H to hide grid";
             let p = Paragraph::new(text).alignment(Alignment::Left);
             Widget::render(p, area, buf);
         })
