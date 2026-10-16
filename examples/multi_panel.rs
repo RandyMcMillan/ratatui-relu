@@ -41,10 +41,114 @@ struct TestMode {
 /// Keys simulated during each test permutation.
 const TEST_KEYS: [KeyCode; 4] = [KeyCode::Left, KeyCode::Right, KeyCode::Up, KeyCode::Down];
 
+// State bit indices for matrix operations.
+const BIT_HEADER: u8 = 0;
+const BIT_LEFT: u8 = 1;
+const BIT_RIGHT: u8 = 2;
+const BIT_FOOTER: u8 = 3;
+
+/// Encode the four panel targets into a 4-bit state vector.
+fn state_bits(state: &MultiPanelState) -> u8 {
+    let bit = |panel: &ratarelu::animation::Transition, idx: u8| {
+        if panel.target() > 0.5 { 1 << idx } else { 0 }
+    };
+    bit(&state.header, BIT_HEADER)
+        | bit(&state.left_sidebar, BIT_LEFT)
+        | bit(&state.right_sidebar, BIT_RIGHT)
+        | bit(&state.footer, BIT_FOOTER)
+}
+
+/// Apply a 4-bit state vector to the panel transitions.
+fn set_state_bits(state: &mut MultiPanelState, bits: u8) {
+    let open = |idx: u8| if (bits >> idx) & 1 == 1 { 1.0 } else { 0.0 };
+    state.header.set_target(open(BIT_HEADER));
+    state.left_sidebar.set_target(open(BIT_LEFT));
+    state.right_sidebar.set_target(open(BIT_RIGHT));
+    state.footer.set_target(open(BIT_FOOTER));
+}
+
+/// Transition matrix for arrow keys.
+///
+/// Given a 4-bit panel state vector, returns the next 4-bit state vector that
+/// should result from pressing `key`.
+fn transition_matrix(state: u8, key: KeyCode) -> u8 {
+    let h = (state >> BIT_HEADER) & 1;
+    let l = (state >> BIT_LEFT) & 1;
+    let r = (state >> BIT_RIGHT) & 1;
+    let f = (state >> BIT_FOOTER) & 1;
+
+    let (nh, nl, nr, nf) = match key {
+        KeyCode::Up => {
+            if h == 0 && f == 1 {
+                (h, l, r, f) // boost: no panel change
+            } else if h == 0 {
+                (h, l, r, 1) // open footer
+            } else {
+                (0, l, r, f) // close header
+            }
+        }
+        KeyCode::Down => {
+            if f == 0 && h == 1 {
+                (h, l, r, f) // boost
+            } else if f == 0 {
+                (1, l, r, f) // open header
+            } else {
+                (h, l, r, 0) // close footer
+            }
+        }
+        KeyCode::Right => {
+            if r == 0 && l == 1 {
+                (h, l, r, f) // boost
+            } else if r == 0 {
+                (h, 1, r, f) // open left
+            } else {
+                (h, l, 0, f) // close right
+            }
+        }
+        KeyCode::Left => {
+            if l == 0 && r == 1 {
+                (h, l, r, f) // boost
+            } else if l == 0 {
+                (h, l, 1, f) // open right
+            } else {
+                (h, 0, r, f) // close left
+            }
+        }
+        _ => (h, l, r, f),
+    };
+
+    (nh << BIT_HEADER) | (nl << BIT_LEFT) | (nr << BIT_RIGHT) | (nf << BIT_FOOTER)
+}
+
+/// Run the full 16×4 transition matrix and return the first mismatch, if any.
+fn verify_transition_matrix() -> Option<String> {
+    for state in 0..16u8 {
+        for key in TEST_KEYS {
+            let mut test_state = MultiPanelState::closed(100.0);
+            set_state_bits(&mut test_state, state);
+            let mut app = App::from_state(test_state);
+            app.simulate_key(key);
+            let expected = transition_matrix(state, key);
+            let actual = state_bits(&app.state);
+            if actual != expected {
+                return Some(format!(
+                    "state={:04b} key={:?} expected={:04b} actual={:04b}",
+                    state, key, expected, actual
+                ));
+            }
+        }
+    }
+    None
+}
+
 impl App {
     fn new() -> Self {
         // Try to restore previous panel state; fall back to all panels open.
         let state = MultiPanelState::load().unwrap_or_else(|| MultiPanelState::open(4.0));
+        Self::from_state(state)
+    }
+
+    fn from_state(state: MultiPanelState) -> Self {
         Self {
             state,
             left_boost: false,
@@ -83,6 +187,11 @@ impl App {
     }
 
     fn start_test_mode(&mut self) {
+        if let Some(err) = verify_transition_matrix() {
+            eprintln!("Transition matrix mismatch: {}", err);
+        } else {
+            eprintln!("Transition matrix verified: all 64 state-key cases pass");
+        }
         self.test_mode = Some(TestMode {
             permutation: 0,
             step: 0,
@@ -237,11 +346,13 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
     let header_height = app.header_height();
     let footer_height = app.footer_height();
     let test_label = app.test_mode.as_ref().map(|t| {
+        let bits = state_bits(&app.state);
         format!(
-            "TEST MODE perm {}/16 key {}/{}",
+            "TEST MODE perm {}/16 key {}/{} state {:04b}",
             t.permutation + 1,
             t.step + 1,
-            TEST_KEYS.len()
+            TEST_KEYS.len(),
+            bits
         )
     });
 
