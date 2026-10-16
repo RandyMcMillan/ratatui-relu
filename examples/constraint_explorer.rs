@@ -1,11 +1,13 @@
 //! A Ratatui example that demonstrates how different layout constraints work.
 //!
-//! Ported from the Ratatui `constraint-explorer` example.
+//! Ported from the Ratatui `constraint-explorer` example and smoothed with
+//! `ratatui-relu`'s [`Transition`] animation primitive.
 //!
 //! Run with: cargo run --example constraint_explorer
 
 use std::cmp::Ordering;
 use std::io::{self, stdout, Stdout};
+use std::time::Instant;
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
@@ -24,6 +26,7 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget, Wrap},
     Terminal,
 };
+use ratatui_relu::animation::Transition;
 use strum::{Display, EnumIter, FromRepr};
 
 fn setup_terminal() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
@@ -47,13 +50,24 @@ fn main() -> io::Result<()> {
     result
 }
 
-#[derive(Default)]
 struct App {
     mode: AppMode,
-    spacing: i16,
-    constraints: Vec<Constraint>,
+    spacing: Transition,
+    constraints: Vec<AnimatedConstraint>,
     selected_index: usize,
     value: u16,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            mode: AppMode::default(),
+            spacing: Transition::new(0.0, ANIMATION_SPEED),
+            constraints: Vec::new(),
+            selected_index: 0,
+            value: 0,
+        }
+    }
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -75,6 +89,13 @@ enum ConstraintName {
     Fill,
 }
 
+/// A constraint whose numeric value animates smoothly towards a target.
+#[derive(Debug, Clone)]
+struct AnimatedConstraint {
+    name: ConstraintName,
+    value: Transition,
+}
+
 /// A widget that renders a [`Constraint`] as a block.
 struct ConstraintBlock {
     constraint: Constraint,
@@ -85,20 +106,75 @@ struct ConstraintBlock {
 /// A widget that renders a spacer with a label indicating the width of the spacer.
 struct SpacerBlock;
 
+const ANIMATION_SPEED: f64 = 40.0;
+
+impl AnimatedConstraint {
+    fn new(name: ConstraintName, value: f64) -> Self {
+        Self {
+            name,
+            value: Transition::new(value, ANIMATION_SPEED),
+        }
+    }
+
+    fn constraint(&self) -> Constraint {
+        let v = self.value.current();
+        match self.name {
+            ConstraintName::Length => Length(v as u16),
+            ConstraintName::Percentage => Percentage(v as u16),
+            ConstraintName::Min => Min(v as u16),
+            ConstraintName::Max => Max(v as u16),
+            ConstraintName::Fill => Fill(v as u16),
+            ConstraintName::Ratio => Ratio(1, v.max(1.0) as u32),
+        }
+    }
+
+    fn increment(&mut self) {
+        self.value.set_target(self.value.target() + 1.0);
+    }
+
+    fn decrement(&mut self) {
+        self.value.set_target(self.value.target() - 1.0);
+    }
+
+    fn set_value(&mut self, value: f64) {
+        self.value.set_target(value);
+    }
+
+    fn snap(&mut self) {
+        self.value.snap();
+    }
+
+    fn update(&mut self, dt: std::time::Duration) {
+        self.value.update(dt);
+    }
+}
+
 impl App {
     fn run(&mut self, terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
+        let mut last_tick = Instant::now();
         while self.is_running() {
+            let now = Instant::now();
+            self.update(now - last_tick);
+            last_tick = now;
+
             terminal.draw(|frame| frame.render_widget(&*self, frame.area()))?;
             self.handle_events()?;
         }
         Ok(())
     }
 
+    fn update(&mut self, dt: std::time::Duration) {
+        self.spacing.update(dt);
+        for c in &mut self.constraints {
+            c.update(dt);
+        }
+    }
+
     fn insert_test_defaults(&mut self) {
         self.constraints = vec![
-            Constraint::Length(20),
-            Constraint::Length(20),
-            Constraint::Length(20),
+            AnimatedConstraint::new(ConstraintName::Length, 20.0),
+            AnimatedConstraint::new(ConstraintName::Length, 20.0),
+            AnimatedConstraint::new(ConstraintName::Length, 20.0),
         ];
         self.value = 20;
     }
@@ -135,30 +211,14 @@ impl App {
     }
 
     fn increment_value(&mut self) {
-        let Some(constraint) = self.constraints.get_mut(self.selected_index) else {
-            return;
-        };
-        match constraint {
-            Constraint::Length(v)
-            | Constraint::Min(v)
-            | Constraint::Max(v)
-            | Constraint::Fill(v)
-            | Constraint::Percentage(v) => *v = v.saturating_add(1),
-            Constraint::Ratio(_n, d) => *d = d.saturating_add(1),
+        if let Some(c) = self.constraints.get_mut(self.selected_index) {
+            c.increment();
         }
     }
 
     fn decrement_value(&mut self) {
-        let Some(constraint) = self.constraints.get_mut(self.selected_index) else {
-            return;
-        };
-        match constraint {
-            Constraint::Length(v)
-            | Constraint::Min(v)
-            | Constraint::Max(v)
-            | Constraint::Fill(v)
-            | Constraint::Percentage(v) => *v = v.saturating_sub(1),
-            Constraint::Ratio(_n, d) => *d = d.saturating_sub(1),
+        if let Some(c) = self.constraints.get_mut(self.selected_index) {
+            c.decrement();
         }
     }
 
@@ -191,17 +251,17 @@ impl App {
             .selected_index
             .saturating_add(1)
             .min(self.constraints.len());
-        let constraint = Constraint::Length(self.value);
+        let constraint = AnimatedConstraint::new(ConstraintName::Length, f64::from(self.value));
         self.constraints.insert(index, constraint);
         self.selected_index = index;
     }
 
-    const fn increment_spacing(&mut self) {
-        self.spacing = self.spacing.saturating_add(1);
+    fn increment_spacing(&mut self) {
+        self.spacing.set_target(self.spacing.target() + 1.0);
     }
 
-    const fn decrement_spacing(&mut self) {
-        self.spacing = self.spacing.saturating_sub(1);
+    fn decrement_spacing(&mut self) {
+        self.spacing.set_target(self.spacing.target() - 1.0);
     }
 
     const fn exit(&mut self) {
@@ -209,31 +269,22 @@ impl App {
     }
 
     fn swap_constraint(&mut self, name: ConstraintName) {
-        if self.constraints.is_empty() {
-            return;
+        if let Some(c) = self.constraints.get_mut(self.selected_index) {
+            let current = c.value.current();
+            c.name = name;
+            c.set_value(f64::from(self.value));
+            c.snap();
+            // Preserve the old visual size for a smooth cross-fade feel.
+            let _ = current;
         }
-        let constraint = match name {
-            ConstraintName::Length => Length(self.value),
-            ConstraintName::Percentage => Percentage(self.value),
-            ConstraintName::Min => Min(self.value),
-            ConstraintName::Max => Max(self.value),
-            ConstraintName::Fill => Fill(self.value),
-            ConstraintName::Ratio => Ratio(1, u32::from(self.value) / 4), // for balance
-        };
-        self.constraints[self.selected_index] = constraint;
     }
-}
 
-impl From<Constraint> for ConstraintName {
-    fn from(constraint: Constraint) -> Self {
-        match constraint {
-            Length(_) => Self::Length,
-            Percentage(_) => Self::Percentage,
-            Ratio(_, _) => Self::Ratio,
-            Min(_) => Self::Min,
-            Max(_) => Self::Max,
-            Fill(_) => Self::Fill,
-        }
+    fn constraints(&self) -> Vec<Constraint> {
+        self.constraints.iter().map(|c| c.constraint()).collect()
+    }
+
+    fn spacing(&self) -> i16 {
+        self.spacing.current() as i16
     }
 }
 
@@ -269,7 +320,7 @@ impl App {
     const AXIS_COLOR: Color = SLATE.c500;
 
     fn header() -> impl Widget {
-        let text = "Constraint Explorer";
+        let text = "Constraint Explorer (smooth)";
         text.bold().fg(Self::HEADER_COLOR).into_centered_line()
     }
 
@@ -305,11 +356,10 @@ impl App {
     }
 
     fn axis(&self, width: u16) -> impl Widget {
-        let label = match self.spacing.cmp(&0) {
-            Ordering::Greater => format!("{width} px (gap: {} px)", self.spacing),
-            Ordering::Less => {
-                format!("{width} px (overlap: {} px)", self.spacing.unsigned_abs())
-            }
+        let spacing = self.spacing();
+        let label = match spacing.cmp(&0) {
+            Ordering::Greater => format!("{width} px (gap: {spacing} px)"),
+            Ordering::Less => format!("{width} px (overlap: {} px)", spacing.unsigned_abs()),
             Ordering::Equal => format!("{width} px"),
         };
         let bar_width = width.saturating_sub(2) as usize;
@@ -348,7 +398,7 @@ impl App {
 
         for (i, (area, constraint)) in blocks.iter().zip(self.constraints.iter()).enumerate() {
             let selected = self.selected_index == i;
-            ConstraintBlock::new(*constraint, selected, true).render(*area, buf);
+            ConstraintBlock::new(constraint.constraint(), selected, true).render(*area, buf);
         }
     }
 
@@ -365,14 +415,15 @@ impl App {
 
         self.axis(area.width).render(axis_area, buf);
 
-        let (blocks, spacers) = Layout::horizontal(&self.constraints)
+        let constraints = self.constraints();
+        let (blocks, spacers) = Layout::horizontal(&constraints)
             .flex(flex)
-            .spacing(self.spacing)
+            .spacing(self.spacing())
             .split_with_spacers(blocks_area);
 
         for (i, (area, constraint)) in blocks.iter().zip(self.constraints.iter()).enumerate() {
             let selected = self.selected_index == i;
-            ConstraintBlock::new(*constraint, selected, false).render(*area, buf);
+            ConstraintBlock::new(constraint.constraint(), selected, false).render(*area, buf);
         }
 
         for area in spacers.iter() {
@@ -596,6 +647,19 @@ impl ConstraintName {
             Self::Fill => STONE.c800,
             Self::Min => SKY.c600,
             Self::Max => SKY.c700,
+        }
+    }
+}
+
+impl From<Constraint> for ConstraintName {
+    fn from(constraint: Constraint) -> Self {
+        match constraint {
+            Length(_) => Self::Length,
+            Percentage(_) => Self::Percentage,
+            Ratio(_, _) => Self::Ratio,
+            Min(_) => Self::Min,
+            Max(_) => Self::Max,
+            Fill(_) => Self::Fill,
         }
     }
 }
