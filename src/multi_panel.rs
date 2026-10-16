@@ -939,26 +939,15 @@ impl MultiPanelApp {
     }
 }
 
-fn bit_display(bits: u8, width: u16) -> String {
-    let bit_chars: String = (0..8)
+fn bit_display(bits: u8) -> String {
+    (0..8)
         .map(|i| {
             let bit = (bits >> (7 - i)) & 1;
             if bit == 1 { '1' } else { '0' }
         })
         .map(|c| c.to_string())
         .collect::<Vec<_>>()
-        .join(" ");
-
-    let block_width = (width / 8).max(1) as usize;
-    let bar: String = (0..8)
-        .map(|i| {
-            let bit = (bits >> (7 - i)) & 1;
-            let ch = if bit == 1 { '█' } else { '░' };
-            ch.to_string().repeat(block_width)
-        })
-        .collect();
-
-    format!("{}\n{}", bit_chars, bar)
+        .join(" ")
 }
 
 fn load_app_from_path(path: &std::path::Path) -> Option<MultiPanelApp> {
@@ -1029,7 +1018,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                 .center_content({
                     if let Some(label) = test_label.clone() {
                         let bits = test_bits.unwrap_or(0);
-                        format!("{}\n{}", label, bit_display(bits, area.width))
+                        format!("{}\n{}", label, bit_display(bits))
                     } else {
                         format!("{}x{}", area.width, area.height)
                     }
