@@ -12,12 +12,12 @@ use std::time::Duration;
 
 use crossterm::event::KeyCode;
 use ratatui::{
+    Frame,
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     text::Text,
     widgets::{Block, Borders, Paragraph, StatefulWidget, Widget},
-    Frame,
 };
 
 use crate::animation::Transition;
@@ -89,7 +89,10 @@ impl MultiPanelState {
     /// Save state to the default config file.
     pub fn save(&self) -> std::io::Result<()> {
         let path = Self::config_path().ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::NotFound, "could not determine config directory")
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "could not determine config directory",
+            )
         })?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -345,8 +348,12 @@ impl StatefulWidget for MultiPanel {
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let header_height = (state.header.current() * self.header_height as f64).round() as u16;
         let footer_height = (state.footer.current() * self.footer_height as f64).round() as u16;
-        let left_width = (state.left_sidebar.current() * area.width as f64 * self.left_sidebar_width_fraction).round() as u16;
-        let right_width = (state.right_sidebar.current() * area.width as f64 * self.right_sidebar_width_fraction).round() as u16;
+        let left_width =
+            (state.left_sidebar.current() * area.width as f64 * self.left_sidebar_width_fraction)
+                .round() as u16;
+        let right_width =
+            (state.right_sidebar.current() * area.width as f64 * self.right_sidebar_width_fraction)
+                .round() as u16;
 
         let vertical = Layout::default()
             .direction(Direction::Vertical)
@@ -441,12 +448,7 @@ fn render_panel(
 // ============================================================
 
 /// Keys simulated during test mode.
-pub const TEST_KEYS: [KeyCode; 4] = [
-    KeyCode::Left,
-    KeyCode::Right,
-    KeyCode::Up,
-    KeyCode::Down,
-];
+pub const TEST_KEYS: [KeyCode; 4] = [KeyCode::Left, KeyCode::Right, KeyCode::Up, KeyCode::Down];
 
 // State bit indices for matrix operations.
 // Panel bits:
@@ -501,6 +503,10 @@ pub struct MultiPanelApp {
     pub right_boost: bool,
     pub top_boost: bool,
     pub bottom_boost: bool,
+    /// Whether the inner neighbor-report grid is visible.
+    #[serde(skip)]
+    pub show_grid: bool,
+    #[serde(skip)]
     pub test_mode: Option<TestMode>,
     #[serde(skip)]
     pub config: MultiPanelAppConfig,
@@ -544,10 +550,13 @@ impl MultiPanelApp {
     /// Create a new app with a custom config.
     pub fn with_config(config: MultiPanelAppConfig) -> Self {
         let path = config.save_path.clone().or_else(Self::default_config_path);
-        let state = path
-            .and_then(|p| load_from_path(&p).ok())
-            .unwrap_or_else(|| MultiPanelState::open(4.0));
-        Self::from_state_with_config(state, config)
+        if let Some(p) = path
+            && let Some(mut app) = load_app_from_path(&p)
+        {
+            app.config = config;
+            return app;
+        }
+        Self::from_state_with_config(MultiPanelState::open(4.0), config)
     }
 
     /// Create an app from an existing panel state and the demo config.
@@ -559,10 +568,11 @@ impl MultiPanelApp {
     pub fn from_state_with_config(state: MultiPanelState, config: MultiPanelAppConfig) -> Self {
         Self {
             state,
-            left_boost: false,
-            right_boost: false,
-            top_boost: false,
-            bottom_boost: false,
+            left_boost: true,
+            right_boost: true,
+            top_boost: true,
+            bottom_boost: true,
+            show_grid: true,
             test_mode: None,
             config,
         }
@@ -570,9 +580,12 @@ impl MultiPanelApp {
 
     /// Load app state from the configured path, or the default location.
     pub fn load(&self) -> Option<Self> {
-        let path = self.config.save_path.clone().or_else(Self::default_config_path)?;
-        let bytes = std::fs::read(&path).ok()?;
-        let mut app: Self = serde_json::from_slice(&bytes).ok()?;
+        let path = self
+            .config
+            .save_path
+            .clone()
+            .or_else(Self::default_config_path)?;
+        let mut app = load_app_from_path(&path)?;
         app.config.save_path = self.config.save_path.clone();
         Some(app)
     }
@@ -605,7 +618,8 @@ impl MultiPanelApp {
         let mut advance: Option<(u8, u8)> = None;
         if let Some(test) = &mut self.test_mode {
             test.timer += dt;
-            if test.timer >= Duration::from_millis(500) { //debuging artifacts
+            if test.timer >= Duration::from_millis(500) {
+                //debuging artifacts
                 test.timer = Duration::ZERO;
                 advance = Some((test.state, test.step));
                 test.step += 1;
@@ -627,13 +641,16 @@ impl MultiPanelApp {
     /// Start automated test mode and verify the transition matrix first.
     ///
     /// The test begins from the current TUI state rather than resetting to
-    /// state zero.
+    /// state zero. The inner grid is hidden so the layout transitions are
+    /// clearly visible.
     pub fn start_test_mode(&mut self) {
+        //self.show_grid = false;
         if let Some(err) = verify_transition_matrix() {
             eprintln!("Transition matrix mismatch: {}", err);
         } else {
-            eprintln!("Transition matrix verified: all 1024 state-key cases pass");
+            //eprintln!("Transition matrix verified: all 1024 state-key cases pass");
         }
+        //self.show_grid = false;
         let start = state_bits(self);
         self.test_mode = Some(TestMode {
             state: start,
@@ -644,9 +661,10 @@ impl MultiPanelApp {
         self.state.snap();
     }
 
-    /// Stop automated test mode.
+    /// Stop automated test mode and restore the inner grid.
     pub fn stop_test_mode(&mut self) {
         self.test_mode = None;
+        self.show_grid = true;
     }
 
     /// Handle a key press (real or simulated).
@@ -655,8 +673,18 @@ impl MultiPanelApp {
             KeyCode::Char('T') => {
                 if self.test_mode.is_some() {
                     self.stop_test_mode();
+                    //self.show_grid = true; // !self.show_grid;
                 } else {
                     self.start_test_mode();
+                    //self.show_grid = false; // !self.show_grid;
+                }
+            }
+            KeyCode::Char('H') => {
+                self.show_grid = !self.show_grid;
+                if self.test_mode.is_some() {
+                    //self.show_grid = false;
+                } else {
+                    //self.show_grid = true;
                 }
             }
             KeyCode::Char('h') => self.state.header.toggle_between(0.0, 1.0),
@@ -712,6 +740,29 @@ impl MultiPanelApp {
         }
     }
 
+    /// Handle a full key event, distinguishing `Shift+` combinations.
+    ///
+    /// Non-shifted keys are forwarded to [`Self::handle_key`]. Simulated keys
+    /// (arrow keys used by test mode) should keep using [`Self::handle_key`].
+    pub fn handle_key_event(&mut self, key: crossterm::event::KeyEvent) {
+        use crossterm::event::KeyModifiers;
+        match (key.code, key.modifiers) {
+            (KeyCode::Char('h'), m) if m.contains(KeyModifiers::SHIFT) => {
+                self.show_grid = !self.show_grid;
+            }
+            (KeyCode::Char('t'), m) if m.contains(KeyModifiers::SHIFT) => {
+                if self.test_mode.is_some() {
+                    self.stop_test_mode();
+                    //self.show_grid = true; // after
+                } else {
+                    //self.show_grid = false; // before
+                    self.start_test_mode();
+                }
+            }
+            _ => self.handle_key(key.code),
+        }
+    }
+
     /// Render the app into the given frame using the configured widget builder.
     pub fn render(&mut self, f: &mut Frame) {
         let widget = (self.config.widget_builder)(self);
@@ -739,9 +790,9 @@ impl MultiPanelApp {
     }
 }
 
-fn load_from_path(path: &std::path::Path) -> std::io::Result<MultiPanelState> {
-    let bytes = std::fs::read(path)?;
-    serde_json::from_slice(&bytes).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+fn load_app_from_path(path: &std::path::Path) -> Option<MultiPanelApp> {
+    let bytes = std::fs::read(path).ok()?;
+    serde_json::from_slice(&bytes).ok()
 }
 
 fn save_to_path(app: &MultiPanelApp, path: &std::path::Path) -> std::io::Result<()> {
@@ -757,6 +808,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     let right_fraction = app.right_sidebar_fraction();
     let header_height = app.header_height();
     let footer_height = app.footer_height();
+    let show_grid = app.show_grid;
     let test_label = app.test_mode.as_ref().map(|t| {
         let bits = state_bits(app);
         format!(
@@ -767,7 +819,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             bits
         )
     });
-    let help = "[h/l/r/f] toggle  [Space] all  [↑] close top + boost bottom  [↓] close bottom + boost top  [←] close left + boost right  [→] close right + boost left  [Shift+T] test  [q] quit";
+    let help = "[h/l/r/f] toggle  [Space] all  [↑↓←→] boost  [Shift+H] hide grid  [Shift+T] test  [q] quit";
 
     MultiPanel::new()
         .header_title("Header")
@@ -790,9 +842,23 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         })
         .main_content(move |state, area, buf| {
             use crate::report_grid::NeighborReportGrid;
-            let grid = NeighborReportGrid::new(left_fraction, right_fraction, header_height, footer_height)
-                .center_content(test_label.clone().unwrap_or_else(|| format!("{}x{}", area.width, area.height)));
-            StatefulWidget::render(grid, area, buf, state);
+            use ratatui::widgets::Clear;
+            if show_grid {
+                let grid = NeighborReportGrid::new(
+                    left_fraction,
+                    right_fraction,
+                    header_height,
+                    footer_height,
+                )
+                .center_content(
+                    test_label
+                        .clone()
+                        .unwrap_or_else(|| format!("{}x{}", area.width, area.height)),
+                );
+                StatefulWidget::render(grid, area, buf, state);
+            } else {
+                Clear.render(area, buf);
+            }
         })
         .footer_content(move |_state, area, buf| {
             let bottom = Rect::new(
@@ -825,9 +891,21 @@ pub fn state_bits(app: &MultiPanelApp) -> u8 {
         | panel_bit(&app.state.right_sidebar, BIT_RIGHT)
         | panel_bit(&app.state.footer, BIT_FOOTER)
         | if app.top_boost { 1 << BIT_TOP_BOOST } else { 0 }
-        | if app.bottom_boost { 1 << BIT_BOTTOM_BOOST } else { 0 }
-        | if app.left_boost { 1 << BIT_LEFT_BOOST } else { 0 }
-        | if app.right_boost { 1 << BIT_RIGHT_BOOST } else { 0 }
+        | if app.bottom_boost {
+            1 << BIT_BOTTOM_BOOST
+        } else {
+            0
+        }
+        | if app.left_boost {
+            1 << BIT_LEFT_BOOST
+        } else {
+            0
+        }
+        | if app.right_boost {
+            1 << BIT_RIGHT_BOOST
+        } else {
+            0
+        }
 }
 
 /// Apply an 8-bit state vector to the app (panels + boosts).
