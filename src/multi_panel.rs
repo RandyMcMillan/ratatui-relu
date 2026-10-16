@@ -20,7 +20,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, StatefulWidget, Widget},
 };
 
-use crate::animation::Transition;
+use crate::animation::{ColorTransition, Transition};
 
 /// Mutable state for [`MultiPanel`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -457,6 +457,7 @@ const HELP_TEXT: &str = "ratatui-relu shortcuts\n\n\
     ← / →       close side and boost opposite\n\
     Shift+H     hide / show inner grid\n\
     Shift+T     start / stop automated test matrix\n\
+    Shift+C     toggle color transition demo\n\
     \\           toggle this help overlay\n\
     q / Esc     quit";
 
@@ -519,6 +520,13 @@ pub struct MultiPanelApp {
     /// Whether the full-screen help overlay is visible.
     #[serde(skip)]
     pub show_help: bool,
+    /// Whether the color-transition demo is running.
+    #[serde(skip)]
+    pub color_demo: bool,
+    #[serde(skip)]
+    pub color_demo_transition: Option<ColorTransition>,
+    #[serde(skip)]
+    pub color_demo_timer: Duration,
     #[serde(skip)]
     pub test_mode: Option<TestMode>,
     #[serde(skip)]
@@ -552,6 +560,15 @@ impl Default for MultiPanelApp {
         Self::new()
     }
 }
+
+const COLOR_DEMO_PALETTE: [Color; 6] = [
+    Color::Rgb(255, 0, 0),
+    Color::Rgb(255, 127, 0),
+    Color::Rgb(255, 255, 0),
+    Color::Rgb(0, 255, 0),
+    Color::Rgb(0, 127, 255),
+    Color::Rgb(127, 0, 255),
+];
 
 impl MultiPanelApp {
     /// Create a new app with the demo config. Tries to load persisted state;
@@ -587,6 +604,9 @@ impl MultiPanelApp {
             bottom_boost: true,
             show_grid: true,
             show_help: false,
+            color_demo: false,
+            color_demo_transition: None,
+            color_demo_timer: Duration::ZERO,
             test_mode: None,
             config,
         }
@@ -625,9 +645,37 @@ impl MultiPanelApp {
         dirs::config_dir().map(|d| d.join("ratatui-relu").join("multi_panel_app.json"))
     }
 
-    /// Advance animations and automated test mode.
+    /// Advance animations, automated test mode, and color demo.
     pub fn update(&mut self, dt: Duration) {
         self.state.update(dt);
+
+        if self.color_demo {
+            if self.color_demo_transition.is_none() {
+                self.color_demo_transition = Some(ColorTransition::new(
+                    COLOR_DEMO_PALETTE[0],
+                    120.0,
+                ));
+                self.color_demo_transition
+                    .as_mut()
+                    .unwrap()
+                    .set_target(COLOR_DEMO_PALETTE[1]);
+                self.color_demo_timer = Duration::ZERO;
+            }
+            if let Some(transition) = &mut self.color_demo_transition {
+                transition.update(dt);
+                self.color_demo_timer += dt;
+                if self.color_demo_timer >= Duration::from_secs(2) && transition.is_done() {
+                    self.color_demo_timer = Duration::ZERO;
+                    let current_target = transition.target();
+                    let next_index = COLOR_DEMO_PALETTE
+                        .iter()
+                        .position(|&c| c == current_target)
+                        .map(|i| (i + 1) % COLOR_DEMO_PALETTE.len())
+                        .unwrap_or(1);
+                    transition.set_target(COLOR_DEMO_PALETTE[next_index]);
+                }
+            }
+        }
 
         let mut advance: Option<(u8, u8)> = None;
         if let Some(test) = &mut self.test_mode {
@@ -767,6 +815,10 @@ impl MultiPanelApp {
                     self.start_test_mode();
                 }
             }
+            // Color demo
+            (KeyCode::Char('c'), m) if m.contains(KeyModifiers::SHIFT) => {
+                self.color_demo = !self.color_demo;
+            }
             _ => self.handle_key(key.code),
         }
     }
@@ -826,6 +878,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     let header_height = app.header_height();
     let footer_height = app.footer_height();
     let show_grid = app.show_grid;
+    let color_demo_color = app.color_demo_transition.as_ref().map(|ct| ct.current());
     let test_label = app.test_mode.as_ref().map(|t| {
         let bits = state_bits(app);
         format!(
@@ -836,7 +889,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             bits
         )
     });
-    let help = "[h/l/r/f] toggle  [Space] all  [↑↓←→] boost  [Shift+H] hide grid  [Shift+T] test  [\\] help  [q] quit";
+    let help = "[h/l/r/f] toggle  [Space] all  [↑↓←→] boost  [Shift+H] hide grid  [Shift+T] test  [Shift+C] colors  [\\] help  [q] quit";
 
     MultiPanel::new()
         .header_title("Header")
@@ -871,7 +924,8 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                     test_label
                         .clone()
                         .unwrap_or_else(|| format!("{}x{}", area.width, area.height)),
-                );
+                )
+                .cell_color(color_demo_color.unwrap_or(Color::Reset));
                 StatefulWidget::render(grid, area, buf, state);
             } else {
                 Clear.render(area, buf);

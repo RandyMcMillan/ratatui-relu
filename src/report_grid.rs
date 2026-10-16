@@ -5,7 +5,7 @@
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::Style,
+    style::{Color, Style},
     text::Text,
     widgets::{Block, Borders, Paragraph, StatefulWidget, Widget},
 };
@@ -20,6 +20,7 @@ pub struct NeighborReportGrid {
     header_height: u16,
     footer_height: u16,
     center_content: Option<String>,
+    cell_color: Option<Color>,
 }
 
 impl NeighborReportGrid {
@@ -37,6 +38,7 @@ impl NeighborReportGrid {
             header_height,
             footer_height,
             center_content: None,
+            cell_color: None,
         }
     }
 
@@ -44,6 +46,12 @@ impl NeighborReportGrid {
     /// the main area dimensions.
     pub fn center_content(mut self, content: impl Into<String>) -> Self {
         self.center_content = Some(content.into());
+        self
+    }
+
+    /// Set a background color for every cell in the grid.
+    pub fn cell_color(mut self, color: Color) -> Self {
+        self.cell_color = Some(color);
         self
     }
 }
@@ -64,24 +72,28 @@ impl StatefulWidget for NeighborReportGrid {
         let cols_top = split_three(rows[0]);
         let cols_mid = split_three(rows[1]);
         let cols_bot = split_three(rows[2]);
+        let cell_color = self.cell_color;
 
         subwidget(
             "Top-Left",
             format!("{}x{}", cols_top[0].width, cols_top[0].height),
             cols_top[0],
             buf,
+            cell_color,
         );
         subwidget(
             "Top",
             format!("{} rows", state.header_height(self.header_height)),
             cols_top[1],
             buf,
+            cell_color,
         );
         subwidget(
             "Top-Right",
             format!("{}x{}", cols_top[2].width, cols_top[2].height),
             cols_top[2],
             buf,
+            cell_color,
         );
 
         subwidget(
@@ -92,6 +104,7 @@ impl StatefulWidget for NeighborReportGrid {
             ),
             cols_mid[0],
             buf,
+            cell_color,
         );
         subwidget(
             "Center",
@@ -100,6 +113,7 @@ impl StatefulWidget for NeighborReportGrid {
                 .unwrap_or_else(|| format!("{}x{}", area.width, area.height)),
             cols_mid[1],
             buf,
+            cell_color,
         );
         subwidget(
             "Right",
@@ -109,6 +123,7 @@ impl StatefulWidget for NeighborReportGrid {
             ),
             cols_mid[2],
             buf,
+            cell_color,
         );
 
         subwidget(
@@ -116,18 +131,21 @@ impl StatefulWidget for NeighborReportGrid {
             format!("{}x{}", cols_bot[0].width, cols_bot[0].height),
             cols_bot[0],
             buf,
+            cell_color,
         );
         subwidget(
             "Bottom",
             format!("{} rows", state.footer_height(self.footer_height)),
             cols_bot[1],
             buf,
+            cell_color,
         );
         subwidget(
             "Bot-Right",
             format!("{}x{}", cols_bot[2].width, cols_bot[2].height),
             cols_bot[2],
             buf,
+            cell_color,
         );
     }
 }
@@ -143,11 +161,18 @@ fn split_three(area: Rect) -> std::rc::Rc<[Rect]> {
         .split(area)
 }
 
-fn subwidget(title: &str, value: String, area: Rect, buf: &mut Buffer) {
-    if area.width < 4 || area.height < 5 {
-        //if area.width == 0 || area.height == 0 {
+fn subwidget(
+    title: &str,
+    value: String,
+    area: Rect,
+    buf: &mut Buffer,
+    cell_color: Option<Color>,
+) {
+    if area.width == 0 || area.height == 0 {
         return;
     }
+
+    let style = cell_color.map_or_else(Style::default, |c| Style::default().bg(c));
 
     // Only draw borders when the cell is large enough; otherwise fall back to
     // plain text to avoid border artifacts in tiny areas.
@@ -157,16 +182,20 @@ fn subwidget(title: &str, value: String, area: Rect, buf: &mut Buffer) {
         let block = Block::default()
             .title(title)
             .borders(Borders::ALL)
-            .style(Style::default());
+            .style(style);
         let inner = block.inner(area);
         Widget::render(block, area, buf);
         if inner.width > 0 && inner.height > 0 {
-            let p = Paragraph::new(Text::from(value)).alignment(Alignment::Center);
+            let p = Paragraph::new(Text::from(value))
+                .alignment(Alignment::Center)
+                .style(style);
             Widget::render(p, inner, buf);
         }
     } else {
         let text = Text::from(format!("{}\n{}", title, value));
-        let p = Paragraph::new(text).alignment(Alignment::Center);
+        let p = Paragraph::new(text)
+            .alignment(Alignment::Center)
+            .style(style);
         Widget::render(p, area, buf);
     }
 }

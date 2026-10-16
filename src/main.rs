@@ -2,7 +2,7 @@
 //!
 //! Demonstrates the reusable [`MultiPanelApp`] from `ratatui_relu::multi_panel`.
 //!
-//! Run in a real terminal with: cargo run --example multi_panel
+//! Run in a real terminal with: cargo run
 
 use std::io::{self, Stdout, stdout};
 use std::time::Instant;
@@ -56,13 +56,16 @@ fn run_app(
             && let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
         {
-            app.handle_key(key.code);
+            app.handle_key_event(key);
             if matches!(
                 key.code,
                 crossterm::event::KeyCode::Char('q') | crossterm::event::KeyCode::Esc
             ) {
                 break;
             }
+            // Repaint immediately after a key press so state changes are
+            // visible right away.
+            terminal.draw(|f| app.render(f))?;
         }
     }
     Ok(())
