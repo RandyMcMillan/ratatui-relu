@@ -13,12 +13,13 @@ use ratatui::{
 use crate::multi_panel::MultiPanelState;
 
 /// Renders a 3×3 grid of sub-widgets, each reporting a neighbor's size.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct NeighborReportGrid {
     left_fraction: f64,
     right_fraction: f64,
     header_height: u16,
     footer_height: u16,
+    center_content: Option<String>,
 }
 
 impl NeighborReportGrid {
@@ -35,7 +36,15 @@ impl NeighborReportGrid {
             right_fraction,
             header_height,
             footer_height,
+            center_content: None,
         }
+    }
+
+    /// Override the center cell's content. If not set, the center cell shows
+    /// the main area dimensions.
+    pub fn center_content(mut self, content: impl Into<String>) -> Self {
+        self.center_content = Some(content.into());
+        self
     }
 }
 
@@ -83,7 +92,9 @@ impl StatefulWidget for NeighborReportGrid {
         );
         subwidget(
             "Center",
-            format!("{}x{}", area.width, area.height),
+            self.center_content
+                .clone()
+                .unwrap_or_else(|| format!("{}x{}", area.width, area.height)),
             cols_mid[1],
             buf,
         );

@@ -763,8 +763,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         .footer_title("Footer")
         .header_content(move |_state, area, buf| {
             let top = Rect::new(area.x, area.y, area.width, 1.min(area.height));
-            let text = test_label.clone().unwrap_or_else(|| "↑ top".to_string());
-            let p = Paragraph::new(text).alignment(Alignment::Center);
+            let p = Paragraph::new("↑ top").alignment(Alignment::Center);
             Widget::render(p, top, buf);
         })
         .left_content(|_state, area, buf| {
@@ -777,7 +776,8 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         })
         .main_content(move |state, area, buf| {
             use crate::report_grid::NeighborReportGrid;
-            let grid = NeighborReportGrid::new(left_fraction, right_fraction, header_height, footer_height);
+            let grid = NeighborReportGrid::new(left_fraction, right_fraction, header_height, footer_height)
+                .center_content(test_label.clone().unwrap_or_else(|| format!("{}x{}", area.width, area.height)));
             StatefulWidget::render(grid, area, buf, state);
         })
         .footer_content(move |_state, area, buf| {
