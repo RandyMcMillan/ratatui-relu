@@ -644,13 +644,11 @@ impl MultiPanelApp {
     /// state zero. The inner grid is hidden so the layout transitions are
     /// clearly visible.
     pub fn start_test_mode(&mut self) {
-        //self.show_grid = false;
         if let Some(err) = verify_transition_matrix() {
             eprintln!("Transition matrix mismatch: {}", err);
         } else {
             //eprintln!("Transition matrix verified: all 1024 state-key cases pass");
         }
-        //self.show_grid = false;
         let start = state_bits(self);
         self.test_mode = Some(TestMode {
             state: start,
@@ -673,18 +671,14 @@ impl MultiPanelApp {
             KeyCode::Char('T') => {
                 if self.test_mode.is_some() {
                     self.stop_test_mode();
-                    //self.show_grid = true; // !self.show_grid;
                 } else {
                     self.start_test_mode();
-                    //self.show_grid = false; // !self.show_grid;
                 }
             }
             KeyCode::Char('H') => {
                 self.show_grid = !self.show_grid;
                 if self.test_mode.is_some() {
-                    //self.show_grid = false;
                 } else {
-                    //self.show_grid = true;
                 }
             }
             KeyCode::Char('h') => self.state.header.toggle_between(0.0, 1.0),
@@ -753,9 +747,7 @@ impl MultiPanelApp {
             (KeyCode::Char('t'), m) if m.contains(KeyModifiers::SHIFT) => {
                 if self.test_mode.is_some() {
                     self.stop_test_mode();
-                    //self.show_grid = true; // after
                 } else {
-                    //self.show_grid = false; // before
                     self.start_test_mode();
                 }
             }
