@@ -5,6 +5,7 @@
 
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
+use std::ffi::c_void;
 use std::time::Duration;
 
 use ratatui_relu::animation::Transition;
@@ -61,6 +62,26 @@ pub extern "C" fn ratatui_relu_transition_target(ptr: *const Transition) -> f64 
     unsafe { ptr.as_ref() }
         .map(|t| t.target())
         .unwrap_or(0.0)
+}
+
+/// Drive a [`Transition`] for `steps` updates of `dt_ms` milliseconds,
+/// calling `callback` after each update. This demonstrates Rust invoking C.
+#[unsafe(no_mangle)]
+pub extern "C" fn ratatui_relu_transition_drive(
+    ptr: *mut Transition,
+    dt_ms: u64,
+    steps: usize,
+    callback: Option<unsafe extern "C" fn(current: f64, target: f64, userdata: *mut c_void)>,
+    userdata: *mut c_void,
+) {
+    if let Some(t) = unsafe { ptr.as_mut() } {
+        for _ in 0..steps {
+            t.update(Duration::from_millis(dt_ms));
+            if let Some(cb) = callback {
+                unsafe { cb(t.current(), t.target(), userdata) };
+            }
+        }
+    }
 }
 
 // ============================================================

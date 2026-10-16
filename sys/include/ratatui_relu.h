@@ -1,6 +1,7 @@
 #ifndef RATATUI_RELU_H
 #define RATATUI_RELU_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -11,6 +12,9 @@ extern "C" {
 typedef struct RatatuiReluTransition RatatuiReluTransition;
 typedef struct RatatuiReluMultiPanel RatatuiReluMultiPanel;
 
+/* Callback type used when Rust calls back into C. */
+typedef void (*RatatuiReluValueCallback)(double current, double target, void *userdata);
+
 /* Transition */
 RatatuiReluTransition *ratatui_relu_transition_new(double value, double speed);
 void ratatui_relu_transition_free(RatatuiReluTransition *t);
@@ -18,6 +22,11 @@ void ratatui_relu_transition_set_target(RatatuiReluTransition *t, double target)
 void ratatui_relu_transition_update(RatatuiReluTransition *t, uint64_t dt_ms);
 double ratatui_relu_transition_current(const RatatuiReluTransition *t);
 double ratatui_relu_transition_target(const RatatuiReluTransition *t);
+void ratatui_relu_transition_drive(RatatuiReluTransition *t,
+                                   uint64_t dt_ms,
+                                   size_t steps,
+                                   RatatuiReluValueCallback callback,
+                                   void *userdata);
 
 /* MultiPanelState */
 RatatuiReluMultiPanel *ratatui_relu_multi_panel_new(double speed);
