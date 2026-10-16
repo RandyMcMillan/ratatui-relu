@@ -1,6 +1,6 @@
 //! Multi-panel layout controlled by independent animated transitions.
 //!
-//! Demonstrates the reusable [`MultiPanelApp`] from `ratarelu::multi_panel`.
+//! Demonstrates the reusable [`MultiPanelApp`] from `ratatui_relu::multi_panel`.
 //!
 //! Run in a real terminal with: cargo run --example multi_panel
 
@@ -14,7 +14,7 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 
-use ratarelu::multi_panel::MultiPanelApp;
+use ratatui_relu::multi_panel::MultiPanelApp;
 
 fn setup_terminal() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
     stdout().execute(EnterAlternateScreen)?;

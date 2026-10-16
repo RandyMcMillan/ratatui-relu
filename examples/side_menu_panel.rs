@@ -22,8 +22,8 @@ use ratatui::{
     Frame, Terminal,
 };
 
-use ratarelu::animation::Transition;
-use ratarelu::layout::handwired_layout_engine;
+use ratatui_relu::animation::Transition;
+use ratatui_relu::layout::handwired_layout_engine;
 
 struct App {
     sidebar: Transition,

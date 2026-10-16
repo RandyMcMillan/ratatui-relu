@@ -1,6 +1,6 @@
 //! Multi-panel layout controlled by independent animated transitions.
 //!
-//! Demonstrates the reusable [`MultiPanelApp`] from `ratarelu::multi_panel`.
+//! Demonstrates the reusable [`MultiPanelApp`] from `ratatui_relu::multi_panel`.
 //!
 //! Run in a real terminal with: cargo run --example multi_panel
 

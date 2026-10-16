@@ -22,7 +22,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 
-use ratarelu::animation::Transition;
+use ratatui_relu::animation::Transition;
 
 struct App {
     header: Transition,
