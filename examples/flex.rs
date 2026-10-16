@@ -4,17 +4,18 @@
 //!
 //! Run with: cargo run --example flex
 
-use std::io::{self, stdout, Stdout};
+use std::io::{self, Stdout, stdout};
 use std::num::NonZeroUsize;
 use std::sync::LazyLock;
 use std::time::Instant;
 
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEventKind},
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
+    event::{self, Event, KeyCode, KeyEventKind},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
+    Terminal,
     backend::CrosstermBackend,
     buffer::Buffer,
     layout::Constraint::{self, Fill, Length, Max, Min, Percentage, Ratio},
@@ -27,7 +28,6 @@ use ratatui::{
         Block, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget, Tabs,
         Widget,
     },
-    Terminal,
 };
 use ratatui_relu::animation::Transition;
 use strum::{Display, EnumIter, FromRepr, IntoEnumIterator};
