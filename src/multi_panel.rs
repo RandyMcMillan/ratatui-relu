@@ -516,7 +516,7 @@ pub struct MultiPanelApp {
     pub top_boost: bool,
     pub bottom_boost: bool,
     /// Whether the inner neighbor-report grid is visible.
-    #[serde(skip)]
+    #[serde(default = "default_show_grid")]
     pub show_grid: bool,
     /// Whether the full-screen help overlay is visible.
     #[serde(skip)]
@@ -565,6 +565,10 @@ impl Default for MultiPanelApp {
     fn default() -> Self {
         Self::new()
     }
+}
+
+const fn default_show_grid() -> bool {
+    true
 }
 
 const COLOR_DEMO_PALETTE: [Color; 6] = [
