@@ -6,6 +6,8 @@
 
 use std::time::Duration;
 
+use ratatui::style::Color;
+
 /// A value that moves smoothly towards a target over time.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Transition {
@@ -66,6 +68,67 @@ impl Transition {
     }
 }
 
+/// Smoothly animates between two RGB colors.
+///
+/// Each color channel is driven by its own [`Transition`]. Only
+/// [`Color::Rgb`] values are interpolated; other variants are treated as
+/// black.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ColorTransition {
+    r: Transition,
+    g: Transition,
+    b: Transition,
+}
+
+impl ColorTransition {
+    /// Create a new color transition starting at `start`.
+    pub fn new(start: Color, speed: f64) -> Self {
+        let (r, g, b) = rgb(start);
+        Self {
+            r: Transition::new(r, speed),
+            g: Transition::new(g, speed),
+            b: Transition::new(b, speed),
+        }
+    }
+
+    /// Set the target color.
+    pub fn set_target(&mut self, color: Color) {
+        let (r, g, b) = rgb(color);
+        self.r.set_target(r);
+        self.g.set_target(g);
+        self.b.set_target(b);
+    }
+
+    /// Advance the color transition by `dt`.
+    pub fn update(&mut self, dt: Duration) {
+        self.r.update(dt);
+        self.g.update(dt);
+        self.b.update(dt);
+    }
+
+    /// The current interpolated color.
+    pub fn current(&self) -> Color {
+        Color::Rgb(self.r.current() as u8, self.g.current() as u8, self.b.current() as u8)
+    }
+
+    /// The target color.
+    pub fn target(&self) -> Color {
+        Color::Rgb(self.r.target() as u8, self.g.target() as u8, self.b.target() as u8)
+    }
+
+    /// Returns `true` when the current color has reached the target.
+    pub fn is_done(&self) -> bool {
+        self.r.is_done() && self.g.is_done() && self.b.is_done()
+    }
+}
+
+fn rgb(color: Color) -> (f64, f64, f64) {
+    match color {
+        Color::Rgb(r, g, b) => (f64::from(r), f64::from(g), f64::from(b)),
+        _ => (0.0, 0.0, 0.0),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -96,5 +159,16 @@ mod tests {
         assert_eq!(tr.target(), 1.0);
         tr.toggle_between(0.0, 1.0);
         assert_eq!(tr.target(), 0.0);
+    }
+
+    #[test]
+    fn color_transition_reaches_target() {
+        let mut ct = ColorTransition::new(Color::Rgb(0, 0, 0), 100.0);
+        ct.set_target(Color::Rgb(100, 200, 50));
+        ct.update(Duration::from_millis(100));
+        assert!(matches!(ct.current(), Color::Rgb(_, _, _)));
+        ct.update(Duration::from_secs(10));
+        assert_eq!(ct.current(), Color::Rgb(100, 200, 50));
+        assert!(ct.is_done());
     }
 }
