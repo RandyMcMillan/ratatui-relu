@@ -605,7 +605,7 @@ impl MultiPanelApp {
         let mut advance: Option<(u8, u8)> = None;
         if let Some(test) = &mut self.test_mode {
             test.timer += dt;
-            if test.timer >= Duration::from_millis(150) {
+            if test.timer >= Duration::from_millis(500) { //debuging artifacts
                 test.timer = Duration::ZERO;
                 advance = Some((test.state, test.step));
                 test.step += 1;
@@ -625,18 +625,22 @@ impl MultiPanelApp {
     }
 
     /// Start automated test mode and verify the transition matrix first.
+    ///
+    /// The test begins from the current TUI state rather than resetting to
+    /// state zero.
     pub fn start_test_mode(&mut self) {
         if let Some(err) = verify_transition_matrix() {
             eprintln!("Transition matrix mismatch: {}", err);
         } else {
             eprintln!("Transition matrix verified: all 1024 state-key cases pass");
         }
+        let start = state_bits(self);
         self.test_mode = Some(TestMode {
-            state: 0,
+            state: start,
             step: 0,
             timer: Duration::ZERO,
         });
-        set_state_bits(self, 0);
+        set_state_bits(self, start);
         self.state.snap();
     }
 
