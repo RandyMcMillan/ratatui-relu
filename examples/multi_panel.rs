@@ -23,7 +23,10 @@ use ratarelu::multi_panel::{MultiPanel, MultiPanelState};
 
 struct App {
     state: MultiPanelState,
+    left_boost: bool,
     right_boost: bool,
+    top_boost: bool,
+    bottom_boost: bool,
     should_quit: bool,
 }
 
@@ -33,7 +36,10 @@ impl App {
         let state = MultiPanelState::load().unwrap_or_else(|| MultiPanelState::open(4.0));
         Self {
             state,
+            left_boost: false,
             right_boost: false,
+            top_boost: false,
+            bottom_boost: false,
             should_quit: false,
         }
     }
@@ -42,12 +48,20 @@ impl App {
         self.state.update(dt);
     }
 
+    fn left_sidebar_fraction(&self) -> f64 {
+        if self.left_boost { 0.50 } else { 0.25 }
+    }
+
     fn right_sidebar_fraction(&self) -> f64 {
-        if self.right_boost {
-            0.50
-        } else {
-            0.25
-        }
+        if self.right_boost { 0.50 } else { 0.25 }
+    }
+
+    fn header_height(&self) -> u16 {
+        if self.top_boost { 10 } else { 5 }
+    }
+
+    fn footer_height(&self) -> u16 {
+        if self.bottom_boost { 10 } else { 5 }
     }
 }
 
@@ -98,15 +112,33 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> i
                 KeyCode::Char('f') => app.state.footer.toggle_between(0.0, 1.0),
                 KeyCode::Char(' ') => app.state.toggle_all(),
                 KeyCode::Up => {
-                    app.state.header.set_target(0.0);
-                    app.state.footer.set_target(1.0);
+                    let top_closed = app.state.header.current() < 0.5;
+                    let bottom_open = app.state.footer.current() > 0.5;
+                    if top_closed && bottom_open {
+                        app.bottom_boost = !app.bottom_boost;
+                    } else if top_closed {
+                        app.state.footer.set_target(1.0);
+                    } else {
+                        app.state.header.toggle_between(0.0, 1.0);
+                    }
                 }
                 KeyCode::Down => {
-                    app.state.footer.set_target(0.0);
-                    app.state.header.set_target(1.0);
+                    let bottom_closed = app.state.footer.current() < 0.5;
+                    let top_open = app.state.header.current() > 0.5;
+                    if bottom_closed && top_open {
+                        app.top_boost = !app.top_boost;
+                    } else if bottom_closed {
+                        app.state.header.set_target(1.0);
+                    } else {
+                        app.state.footer.toggle_between(0.0, 1.0);
+                    }
                 }
                 KeyCode::Right => {
-                    if app.state.right_sidebar.current() < 0.5 {
+                    let right_closed = app.state.right_sidebar.current() < 0.5;
+                    let left_open = app.state.left_sidebar.current() > 0.5;
+                    if right_closed && left_open {
+                        app.left_boost = !app.left_boost;
+                    } else if right_closed {
                         app.state.left_sidebar.set_target(1.0);
                     } else {
                         app.state.right_sidebar.toggle_between(0.0, 1.0);
@@ -116,7 +148,6 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> i
                     let left_closed = app.state.left_sidebar.current() < 0.5;
                     let right_open = app.state.right_sidebar.current() > 0.5;
                     if left_closed && right_open {
-                        // Left is closed and right is open: double the right panel width.
                         app.right_boost = !app.right_boost;
                     } else if left_closed {
                         app.state.right_sidebar.set_target(1.0);
@@ -133,8 +164,12 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> i
 
 fn ui(f: &mut ratatui::Frame, app: &mut App) {
     let area = f.area();
+    let left_fraction = app.left_sidebar_fraction();
+    let right_fraction = app.right_sidebar_fraction();
+    let header_height = app.header_height();
+    let footer_height = app.footer_height();
 
-    let help = "[h/l/r/f] toggle  [Space] all  [↑] close header + open footer  [↓] close footer + open header  [←] toggle left / open right if left closed  [→] toggle right / open left if right closed  [q] quit";
+    let help = "[h/l/r/f] toggle  [Space] all  [↑] close top + boost bottom  [↓] close bottom + boost top  [←] close left + boost right  [→] close right + boost left  [q] quit";
 
     let widget = MultiPanel::new()
         .header_title("Header")
@@ -158,10 +193,7 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
                 .alignment(ratatui::layout::Alignment::Right);
             ratatui::widgets::Widget::render(p, area, buf);
         })
-        .main_content(|state, area, buf| {
-            let left_fraction = 0.25;
-            let right_fraction = app.right_sidebar_fraction();
-
+        .main_content(move |state, area, buf| {
             // Split the main area into a 3x3 grid of sub-widgets.
             let rows = ratatui::layout::Layout::default()
                 .direction(ratatui::layout::Direction::Vertical)
@@ -213,7 +245,7 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
             subwidget("Top-Left", format!("{}x{}", cols_top[0].width, cols_top[0].height), cols_top[0], buf);
             subwidget(
                 "Top",
-                format!("{} rows", state.header_height(5)),
+                format!("{} rows", state.header_height(header_height)),
                 cols_top[1],
                 buf,
             );
@@ -236,7 +268,7 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
             subwidget("Bot-Left", format!("{}x{}", cols_bot[0].width, cols_bot[0].height), cols_bot[0], buf);
             subwidget(
                 "Bottom",
-                format!("{} rows", state.footer_height(5)),
+                format!("{} rows", state.footer_height(footer_height)),
                 cols_bot[1],
                 buf,
             );
@@ -258,9 +290,10 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
         .right_color(Color::Magenta)
         .footer_color(Color::Yellow)
         .main_color(Color::Reset)
-        .panel_height(5)
-        .left_sidebar_width_fraction(0.25)
-        .right_sidebar_width_fraction(app.right_sidebar_fraction());
+        .header_height(header_height)
+        .footer_height(footer_height)
+        .left_sidebar_width_fraction(left_fraction)
+        .right_sidebar_width_fraction(right_fraction);
 
     f.render_stateful_widget(widget, area, &mut app.state);
 }

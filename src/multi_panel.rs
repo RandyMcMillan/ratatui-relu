@@ -147,8 +147,10 @@ pub struct MultiPanel {
     pub right_color: Color,
     pub footer_color: Color,
     pub main_color: Color,
-    /// Height of the header/footer when fully open, in rows.
-    pub panel_height: u16,
+    /// Height of the header when fully open, in rows.
+    pub header_height: u16,
+    /// Height of the footer when fully open, in rows.
+    pub footer_height: u16,
     /// Width of the left sidebar as a fraction of total width (0.0–1.0).
     pub left_sidebar_width_fraction: f64,
     /// Width of the right sidebar as a fraction of total width (0.0–1.0).
@@ -174,7 +176,8 @@ impl MultiPanel {
             right_color: Color::Magenta,
             footer_color: Color::Yellow,
             main_color: Color::Reset,
-            panel_height: 5,
+            header_height: 5,
+            footer_height: 5,
             left_sidebar_width_fraction: 0.25,
             right_sidebar_width_fraction: 0.25,
         }
@@ -255,9 +258,22 @@ impl MultiPanel {
         self
     }
 
-    /// Builder-style setter for panel height.
+    /// Builder-style setter for both header and footer height.
     pub fn panel_height(mut self, height: u16) -> Self {
-        self.panel_height = height;
+        self.header_height = height;
+        self.footer_height = height;
+        self
+    }
+
+    /// Builder-style setter for header height.
+    pub fn header_height(mut self, height: u16) -> Self {
+        self.header_height = height;
+        self
+    }
+
+    /// Builder-style setter for footer height.
+    pub fn footer_height(mut self, height: u16) -> Self {
+        self.footer_height = height;
         self
     }
 
@@ -316,8 +332,8 @@ impl StatefulWidget for MultiPanel {
     type State = MultiPanelState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let header_height = (state.header.current() * self.panel_height as f64).round() as u16;
-        let footer_height = (state.footer.current() * self.panel_height as f64).round() as u16;
+        let header_height = (state.header.current() * self.header_height as f64).round() as u16;
+        let footer_height = (state.footer.current() * self.footer_height as f64).round() as u16;
         let left_width = (state.left_sidebar.current() * area.width as f64 * self.left_sidebar_width_fraction).round() as u16;
         let right_width = (state.right_sidebar.current() * area.width as f64 * self.right_sidebar_width_fraction).round() as u16;
 
