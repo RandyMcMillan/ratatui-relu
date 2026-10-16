@@ -17,7 +17,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     text::Text,
-    widgets::{Block, Borders, Paragraph, StatefulWidget, Widget},
+    widgets::{Block, Borders, Clear, Paragraph, StatefulWidget, Widget},
 };
 
 use crate::animation::Transition;
@@ -767,13 +767,16 @@ impl MultiPanelApp {
 
     /// Render the app into the given frame using the configured widget builder.
     pub fn render(&mut self, f: &mut Frame) {
-        let widget = (self.config.widget_builder)(self);
-        f.render_stateful_widget(widget, f.area(), &mut self.state);
         if self.show_help {
+            let area = f.area();
+            Clear.render(area, f.buffer_mut());
             let help = Paragraph::new(HELP_TEXT)
                 .alignment(Alignment::Center)
                 .block(Block::default().title("Help").borders(Borders::ALL));
-            f.render_widget(help, f.area());
+            f.render_widget(help, area);
+        } else {
+            let widget = (self.config.widget_builder)(self);
+            f.render_stateful_widget(widget, f.area(), &mut self.state);
         }
     }
 
