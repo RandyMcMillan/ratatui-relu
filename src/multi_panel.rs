@@ -824,7 +824,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         let bits = state_bits(app);
         format!(
             "TEST MODE state {}/256 key {}/{} bits {:08b}",
-            t.state + 1,
+            t.state.wrapping_add(1),
             t.step + 1,
             TEST_KEYS.len(),
             bits
