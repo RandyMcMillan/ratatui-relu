@@ -458,6 +458,7 @@ const HELP_TEXT: &str = "ratatui-relu shortcuts\n\n\
     Shift+H     hide / show inner grid\n\
     Shift+T     start / stop automated test matrix\n\
     Shift+C     toggle color transition demo\n\
+    Shift+M     toggle chart dashboard\n\
     \\           toggle this help overlay\n\
     q / Esc     quit";
 
@@ -527,6 +528,11 @@ pub struct MultiPanelApp {
     pub color_demo_transition: Option<ColorTransition>,
     #[serde(skip)]
     pub color_demo_timer: Duration,
+    /// Whether the main area shows charts instead of the grid.
+    #[serde(skip)]
+    pub chart_mode: bool,
+    #[serde(skip)]
+    pub chart_time: f64,
     #[serde(skip)]
     pub test_mode: Option<TestMode>,
     #[serde(skip)]
@@ -607,6 +613,8 @@ impl MultiPanelApp {
             color_demo: false,
             color_demo_transition: None,
             color_demo_timer: Duration::ZERO,
+            chart_mode: false,
+            chart_time: 0.0,
             test_mode: None,
             config,
         }
@@ -645,9 +653,13 @@ impl MultiPanelApp {
         dirs::config_dir().map(|d| d.join("ratatui-relu").join("multi_panel_app.json"))
     }
 
-    /// Advance animations, automated test mode, and color demo.
+    /// Advance animations, automated test mode, color demo, and charts.
     pub fn update(&mut self, dt: Duration) {
         self.state.update(dt);
+
+        if self.chart_mode {
+            self.chart_time += dt.as_secs_f64();
+        }
 
         if self.color_demo {
             if self.color_demo_transition.is_none() {
@@ -742,6 +754,10 @@ impl MultiPanelApp {
             KeyCode::Char('G') => self.show_grid = !self.show_grid,
             // t = top
             KeyCode::Char('t') => self.state.header.toggle_between(0.0, 1.0),
+            // Color demo
+            KeyCode::Char('c') => self.color_demo = !self.color_demo,
+            // Chart mode
+            KeyCode::Char('m') => self.chart_mode = !self.chart_mode,
             KeyCode::Char('l') => self.state.left_sidebar.toggle_between(0.0, 1.0),
             KeyCode::Char('r') => self.state.right_sidebar.toggle_between(0.0, 1.0),
             KeyCode::Char('f') => self.state.footer.toggle_between(0.0, 1.0),
@@ -819,6 +835,10 @@ impl MultiPanelApp {
             (KeyCode::Char('c'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.color_demo = !self.color_demo;
             }
+            // Chart mode
+            (KeyCode::Char('m'), m) if m.contains(KeyModifiers::SHIFT) => {
+                self.chart_mode = !self.chart_mode;
+            }
             _ => self.handle_key(key.code),
         }
     }
@@ -859,6 +879,28 @@ impl MultiPanelApp {
     }
 }
 
+fn bit_display(bits: u8, width: u16) -> String {
+    let bit_chars: String = (0..8)
+        .map(|i| {
+            let bit = (bits >> (7 - i)) & 1;
+            if bit == 1 { '1' } else { '0' }
+        })
+        .map(|c| c.to_string())
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let block_width = (width / 8).max(1) as usize;
+    let bar: String = (0..8)
+        .map(|i| {
+            let bit = (bits >> (7 - i)) & 1;
+            let ch = if bit == 1 { '█' } else { '░' };
+            ch.to_string().repeat(block_width)
+        })
+        .collect();
+
+    format!("{}\n{}", bit_chars, bar)
+}
+
 fn load_app_from_path(path: &std::path::Path) -> Option<MultiPanelApp> {
     let bytes = std::fs::read(path).ok()?;
     serde_json::from_slice(&bytes).ok()
@@ -878,18 +920,19 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     let header_height = app.header_height();
     let footer_height = app.footer_height();
     let show_grid = app.show_grid;
+    let chart_mode = app.chart_mode;
+    let chart_time = app.chart_time;
     let color_demo_color = app.color_demo_transition.as_ref().map(|ct| ct.current());
+    let test_bits = app.test_mode.as_ref().map(|_| state_bits(app));
     let test_label = app.test_mode.as_ref().map(|t| {
-        let bits = state_bits(app);
         format!(
-            "TEST MODE state {}/256 key {}/{} bits {:08b}",
+            "TEST MODE state {}/256 key {}/{}",
             t.state.wrapping_add(1),
             t.step + 1,
             TEST_KEYS.len(),
-            bits
         )
     });
-    let help = "[h/l/r/f] toggle  [Space] all  [↑↓←→] boost  [Shift+H] hide grid  [Shift+T] test  [Shift+C] colors  [\\] help  [q] quit";
+    let help = "[h/l/r/f] toggle  [Space] all  [↑↓←→] boost  [Shift+H] hide grid  [Shift+T] test  [Shift+C] colors  [Shift+M] charts  [\\] help  [q] quit";
 
     MultiPanel::new()
         .header_title("Header")
@@ -911,20 +954,26 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             Widget::render(p, area, buf);
         })
         .main_content(move |state, area, buf| {
+            use crate::chart::ChartDemo;
             use crate::report_grid::NeighborReportGrid;
             use ratatui::widgets::Clear;
-            if show_grid {
+            if chart_mode {
+                Widget::render(ChartDemo::new(chart_time), area, buf);
+            } else if show_grid {
                 let grid = NeighborReportGrid::new(
                     left_fraction,
                     right_fraction,
                     header_height,
                     footer_height,
                 )
-                .center_content(
-                    test_label
-                        .clone()
-                        .unwrap_or_else(|| format!("{}x{}", area.width, area.height)),
-                )
+                .center_content({
+                    if let Some(label) = test_label.clone() {
+                        let bits = test_bits.unwrap_or(0);
+                        format!("{}\n{}", label, bit_display(bits, area.width))
+                    } else {
+                        format!("{}x{}", area.width, area.height)
+                    }
+                })
                 .cell_color(color_demo_color.unwrap_or(Color::Reset));
                 StatefulWidget::render(grid, area, buf, state);
             } else {
