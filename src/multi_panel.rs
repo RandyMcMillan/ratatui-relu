@@ -3,6 +3,10 @@
 //! Renders a layout with header, footer, left sidebar, right sidebar, and main
 //! content areas. Each panel's visibility is controlled by a [`Transition`]
 //! stored in [`MultiPanelState`].
+//!
+//! Every panel can host custom content via a closure of type
+//! `Fn(Rect, &mut Buffer)`. If no custom content is supplied, the panel renders
+//! a default placeholder.
 
 use std::time::Duration;
 
@@ -63,16 +67,25 @@ impl MultiPanelState {
     }
 }
 
+/// Owned custom content renderer for a panel inside [`MultiPanel`].
+pub type PanelContent = Box<dyn Fn(Rect, &mut Buffer)>;
+
+/// Borrowed custom content renderer for a panel inside [`MultiPanel`].
+pub type PanelContentRef<'a> = Option<&'a dyn Fn(Rect, &mut Buffer)>;
+
 /// Configuration for [`MultiPanel`].
-#[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct MultiPanel {
     pub header_title: String,
     pub left_title: String,
     pub right_title: String,
     pub main_title: String,
     pub footer_title: String,
-    /// Optional help text rendered inside the footer.
-    pub footer_content: Option<String>,
+    pub header_content: Option<PanelContent>,
+    pub left_content: Option<PanelContent>,
+    pub right_content: Option<PanelContent>,
+    pub main_content: Option<PanelContent>,
+    pub footer_content: Option<PanelContent>,
     pub header_color: Color,
     pub left_color: Color,
     pub right_color: Color,
@@ -93,6 +106,10 @@ impl MultiPanel {
             right_title: "Right".to_string(),
             main_title: "Main".to_string(),
             footer_title: "Footer".to_string(),
+            header_content: None,
+            left_content: None,
+            right_content: None,
+            main_content: None,
             footer_content: None,
             header_color: Color::Blue,
             left_color: Color::Green,
@@ -134,9 +151,48 @@ impl MultiPanel {
         self
     }
 
-    /// Builder-style setter for footer help/content text.
-    pub fn footer_content(mut self, content: impl Into<String>) -> Self {
-        self.footer_content = Some(content.into());
+    /// Builder-style setter for custom header content.
+    pub fn header_content<F>(mut self, content: F) -> Self
+    where
+        F: Fn(Rect, &mut Buffer) + 'static,
+    {
+        self.header_content = Some(Box::new(content));
+        self
+    }
+
+    /// Builder-style setter for custom left sidebar content.
+    pub fn left_content<F>(mut self, content: F) -> Self
+    where
+        F: Fn(Rect, &mut Buffer) + 'static,
+    {
+        self.left_content = Some(Box::new(content));
+        self
+    }
+
+    /// Builder-style setter for custom right sidebar content.
+    pub fn right_content<F>(mut self, content: F) -> Self
+    where
+        F: Fn(Rect, &mut Buffer) + 'static,
+    {
+        self.right_content = Some(Box::new(content));
+        self
+    }
+
+    /// Builder-style setter for custom main panel content.
+    pub fn main_content<F>(mut self, content: F) -> Self
+    where
+        F: Fn(Rect, &mut Buffer) + 'static,
+    {
+        self.main_content = Some(Box::new(content));
+        self
+    }
+
+    /// Builder-style setter for custom footer content.
+    pub fn footer_content<F>(mut self, content: F) -> Self
+    where
+        F: Fn(Rect, &mut Buffer) + 'static,
+    {
+        self.footer_content = Some(Box::new(content));
         self
     }
 
@@ -183,12 +239,6 @@ impl MultiPanel {
     }
 }
 
-impl Default for MultiPanel {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl StatefulWidget for MultiPanel {
     type State = MultiPanelState;
 
@@ -216,11 +266,35 @@ impl StatefulWidget for MultiPanel {
             ])
             .split(vertical[1]);
 
-        render_panel(buf, &self.header_title, vertical[0], self.header_color);
-        render_panel(buf, &self.left_title, horizontal[0], self.left_color);
-        render_panel(buf, &self.main_title, horizontal[1], self.main_color);
-        render_panel(buf, &self.right_title, horizontal[2], self.right_color);
-        render_footer(
+        render_panel(
+            buf,
+            &self.header_title,
+            vertical[0],
+            self.header_color,
+            self.header_content.as_deref(),
+        );
+        render_panel(
+            buf,
+            &self.left_title,
+            horizontal[0],
+            self.left_color,
+            self.left_content.as_deref(),
+        );
+        render_panel(
+            buf,
+            &self.main_title,
+            horizontal[1],
+            self.main_color,
+            self.main_content.as_deref(),
+        );
+        render_panel(
+            buf,
+            &self.right_title,
+            horizontal[2],
+            self.right_color,
+            self.right_content.as_deref(),
+        );
+        render_panel(
             buf,
             &self.footer_title,
             vertical[2],
@@ -230,7 +304,13 @@ impl StatefulWidget for MultiPanel {
     }
 }
 
-fn render_footer(buf: &mut Buffer, title: &str, area: Rect, color: Color, content: Option<&str>) {
+fn render_panel(
+    buf: &mut Buffer,
+    title: &str,
+    area: Rect,
+    color: Color,
+    content: PanelContentRef<'_>,
+) {
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
@@ -239,25 +319,14 @@ fn render_footer(buf: &mut Buffer, title: &str, area: Rect, color: Color, conten
     Widget::render(block, area, buf);
 
     if inner.width > 0 && inner.height > 0 {
-        let fallback = format!("{} area", title);
-        let text = content.unwrap_or(&fallback);
-        let paragraph = Paragraph::new(Text::from(text)).alignment(Alignment::Center);
-        Widget::render(paragraph, inner, buf);
-    }
-}
-
-fn render_panel(buf: &mut Buffer, title: &str, area: Rect, color: Color) {
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(color));
-    let inner = block.inner(area);
-    Widget::render(block, area, buf);
-
-    if inner.width > 0 && inner.height > 0 {
-        let text = Paragraph::new(Text::from(format!("{} area", title)))
-            .alignment(Alignment::Center);
-        Widget::render(text, inner, buf);
+        match content {
+            Some(render) => render(inner, buf),
+            None => {
+                let text = Paragraph::new(Text::from(format!("{} area", title)))
+                    .alignment(Alignment::Center);
+                Widget::render(text, inner, buf);
+            }
+        }
     }
 }
 
@@ -277,6 +346,17 @@ mod tests {
     fn multi_panel_renders_without_panic() {
         let mut state = MultiPanelState::open(4.0);
         let widget = MultiPanel::new();
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 24));
+        StatefulWidget::render(widget, buf.area, &mut buf, &mut state);
+    }
+
+    #[test]
+    fn multi_panel_renders_custom_content() {
+        let mut state = MultiPanelState::open(4.0);
+        let widget = MultiPanel::new().main_content(|area, buf| {
+            let p = Paragraph::new("custom").alignment(Alignment::Center);
+            Widget::render(p, area, buf);
+        });
         let mut buf = Buffer::empty(Rect::new(0, 0, 80, 24));
         StatefulWidget::render(widget, buf.area, &mut buf, &mut state);
     }
