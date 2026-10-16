@@ -34,8 +34,12 @@ struct App {
 
 struct TestMode {
     permutation: u8,
+    step: u8,
     timer: Duration,
 }
+
+/// Keys simulated during each test permutation.
+const TEST_KEYS: [KeyCode; 4] = [KeyCode::Left, KeyCode::Right, KeyCode::Up, KeyCode::Down];
 
 impl App {
     fn new() -> Self {
@@ -55,23 +59,33 @@ impl App {
     fn update(&mut self, dt: Duration) {
         self.state.update(dt);
 
-        let mut next: Option<u8> = None;
+        let mut advance: Option<(u8, u8)> = None;
         if let Some(test) = &mut self.test_mode {
             test.timer += dt;
-            if test.timer >= Duration::from_millis(400) {
+            if test.timer >= Duration::from_millis(300) {
                 test.timer = Duration::ZERO;
-                test.permutation = (test.permutation + 1) % 16;
-                next = Some(test.permutation);
+                advance = Some((test.permutation, test.step));
+                test.step += 1;
+                if test.step >= TEST_KEYS.len() as u8 {
+                    test.step = 0;
+                    test.permutation = (test.permutation + 1) % 16;
+                }
             }
         }
-        if let Some(p) = next {
-            self.apply_permutation(p);
+        if let Some((permutation, step)) = advance {
+            if step == 0 {
+                // Start of a new permutation: reset to the base state.
+                self.apply_permutation(permutation);
+            }
+            // Simulate the key for this step.
+            self.simulate_key(TEST_KEYS[step as usize]);
         }
     }
 
     fn start_test_mode(&mut self) {
         self.test_mode = Some(TestMode {
             permutation: 0,
+            step: 0,
             timer: Duration::ZERO,
         });
         self.apply_permutation(0);
@@ -79,6 +93,70 @@ impl App {
 
     fn stop_test_mode(&mut self) {
         self.test_mode = None;
+    }
+
+    /// Simulate a key press as if it came from the event loop.
+    pub fn simulate_key(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Char('q') | KeyCode::Esc => self.should_quit = true,
+            KeyCode::Char('T') => {
+                if self.test_mode.is_some() {
+                    self.stop_test_mode();
+                } else {
+                    self.start_test_mode();
+                }
+            }
+            KeyCode::Char('h') => self.state.header.toggle_between(0.0, 1.0),
+            KeyCode::Char('l') => self.state.left_sidebar.toggle_between(0.0, 1.0),
+            KeyCode::Char('r') => self.state.right_sidebar.toggle_between(0.0, 1.0),
+            KeyCode::Char('f') => self.state.footer.toggle_between(0.0, 1.0),
+            KeyCode::Char(' ') => self.state.toggle_all(),
+            KeyCode::Up => {
+                let top_closed = self.state.header.current() < 0.5;
+                let bottom_open = self.state.footer.current() > 0.5;
+                if top_closed && bottom_open {
+                    self.bottom_boost = !self.bottom_boost;
+                } else if top_closed {
+                    self.state.footer.set_target(1.0);
+                } else {
+                    self.state.header.toggle_between(0.0, 1.0);
+                }
+            }
+            KeyCode::Down => {
+                let bottom_closed = self.state.footer.current() < 0.5;
+                let top_open = self.state.header.current() > 0.5;
+                if bottom_closed && top_open {
+                    self.top_boost = !self.top_boost;
+                } else if bottom_closed {
+                    self.state.header.set_target(1.0);
+                } else {
+                    self.state.footer.toggle_between(0.0, 1.0);
+                }
+            }
+            KeyCode::Right => {
+                let right_closed = self.state.right_sidebar.current() < 0.5;
+                let left_open = self.state.left_sidebar.current() > 0.5;
+                if right_closed && left_open {
+                    self.left_boost = !self.left_boost;
+                } else if right_closed {
+                    self.state.left_sidebar.set_target(1.0);
+                } else {
+                    self.state.right_sidebar.toggle_between(0.0, 1.0);
+                }
+            }
+            KeyCode::Left => {
+                let left_closed = self.state.left_sidebar.current() < 0.5;
+                let right_open = self.state.right_sidebar.current() > 0.5;
+                if left_closed && right_open {
+                    self.right_boost = !self.right_boost;
+                } else if left_closed {
+                    self.state.right_sidebar.set_target(1.0);
+                } else {
+                    self.state.left_sidebar.toggle_between(0.0, 1.0);
+                }
+            }
+            _ => {}
+        }
     }
 
     fn apply_permutation(&mut self, permutation: u8) {
@@ -146,66 +224,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> i
             && let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
         {
-            match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
-                KeyCode::Char('T') => {
-                    if app.test_mode.is_some() {
-                        app.stop_test_mode();
-                    } else {
-                        app.start_test_mode();
-                    }
-                }
-                KeyCode::Char('h') => app.state.header.toggle_between(0.0, 1.0),
-                KeyCode::Char('l') => app.state.left_sidebar.toggle_between(0.0, 1.0),
-                KeyCode::Char('r') => app.state.right_sidebar.toggle_between(0.0, 1.0),
-                KeyCode::Char('f') => app.state.footer.toggle_between(0.0, 1.0),
-                KeyCode::Char(' ') => app.state.toggle_all(),
-                KeyCode::Up => {
-                    let top_closed = app.state.header.current() < 0.5;
-                    let bottom_open = app.state.footer.current() > 0.5;
-                    if top_closed && bottom_open {
-                        app.bottom_boost = !app.bottom_boost;
-                    } else if top_closed {
-                        app.state.footer.set_target(1.0);
-                    } else {
-                        app.state.header.toggle_between(0.0, 1.0);
-                    }
-                }
-                KeyCode::Down => {
-                    let bottom_closed = app.state.footer.current() < 0.5;
-                    let top_open = app.state.header.current() > 0.5;
-                    if bottom_closed && top_open {
-                        app.top_boost = !app.top_boost;
-                    } else if bottom_closed {
-                        app.state.header.set_target(1.0);
-                    } else {
-                        app.state.footer.toggle_between(0.0, 1.0);
-                    }
-                }
-                KeyCode::Right => {
-                    let right_closed = app.state.right_sidebar.current() < 0.5;
-                    let left_open = app.state.left_sidebar.current() > 0.5;
-                    if right_closed && left_open {
-                        app.left_boost = !app.left_boost;
-                    } else if right_closed {
-                        app.state.left_sidebar.set_target(1.0);
-                    } else {
-                        app.state.right_sidebar.toggle_between(0.0, 1.0);
-                    }
-                }
-                KeyCode::Left => {
-                    let left_closed = app.state.left_sidebar.current() < 0.5;
-                    let right_open = app.state.right_sidebar.current() > 0.5;
-                    if left_closed && right_open {
-                        app.right_boost = !app.right_boost;
-                    } else if left_closed {
-                        app.state.right_sidebar.set_target(1.0);
-                    } else {
-                        app.state.left_sidebar.toggle_between(0.0, 1.0);
-                    }
-                }
-                _ => {}
-            }
+            app.simulate_key(key.code);
         }
     }
     Ok(app)
@@ -217,10 +236,14 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
     let right_fraction = app.right_sidebar_fraction();
     let header_height = app.header_height();
     let footer_height = app.footer_height();
-    let test_label = app
-        .test_mode
-        .as_ref()
-        .map(|t| format!("TEST MODE permutation {}/16", t.permutation + 1));
+    let test_label = app.test_mode.as_ref().map(|t| {
+        format!(
+            "TEST MODE perm {}/16 key {}/{}",
+            t.permutation + 1,
+            t.step + 1,
+            TEST_KEYS.len()
+        )
+    });
 
     let help = "[h/l/r/f] toggle  [Space] all  [↑] close top + boost bottom  [↓] close bottom + boost top  [←] close left + boost right  [→] close right + boost left  [Shift+T] test  [q] quit";
 
