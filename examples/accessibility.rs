@@ -139,11 +139,29 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
 
 fn ui(f: &mut Frame, app: &App) {
     let area = f.area();
+    let t = app.mode.current();
 
-    let header_height = (app.header.current() * 5.0).round() as u16;
-    let footer_height = (app.footer.current() * 5.0).round() as u16;
-    let left_width = (app.left_sidebar.current() * area.width as f64 * 0.25).round() as u16;
-    let right_width = (app.right_sidebar.current() * area.width as f64 * 0.25).round() as u16;
+    // Accessibility mode scales panel sizes and switches to high contrast.
+    let header_height = lerp(app.header.current() * 5.0, app.header.current() * 8.0, t).round() as u16;
+    let footer_height = lerp(app.footer.current() * 5.0, app.footer.current() * 8.0, t).round() as u16;
+    let left_width = lerp(
+        app.left_sidebar.current() * area.width as f64 * 0.25,
+        app.left_sidebar.current() * area.width as f64 * 0.35,
+        t,
+    )
+    .round() as u16;
+    let right_width = lerp(
+        app.right_sidebar.current() * area.width as f64 * 0.25,
+        app.right_sidebar.current() * area.width as f64 * 0.35,
+        t,
+    )
+    .round() as u16;
+
+    let (border_color, bg_color, fg_color) = if t > 0.5 {
+        (Color::Yellow, Color::White, Color::Black)
+    } else {
+        (Color::Blue, Color::Black, Color::White)
+    };
 
     let vertical = Layout::default()
         .direction(Direction::Vertical)
@@ -163,10 +181,31 @@ fn ui(f: &mut Frame, app: &App) {
         ])
         .split(vertical[1]);
 
-    render_panel(f, "Header", vertical[0], Color::Blue);
-    render_panel(f, "Left", horizontal[0], Color::Green);
-    render_panel(f, "Main", horizontal[1], Color::Reset);
-    render_panel(f, "Right", horizontal[2], Color::Magenta);
+    let mode_label = if app.mode.target() > 0.5 {
+        "Accessibility ON"
+    } else {
+        "Accessibility OFF"
+    };
+    let header_text = Text::from(vec![
+        Line::from(vec![
+            Span::raw("Accessibility Demo | mode: "),
+            Span::styled(
+                mode_label,
+                Style::default()
+                    .fg(if app.mode.target() > 0.5 { Color::Green } else { Color::Red })
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(format!(" | blend: {:.2}", t)),
+        ]),
+        Line::from("[a] accessibility  [h/l/r/f] toggle  [Space] all  [arrows] move  [q] quit"),
+    ]);
+    let header = Paragraph::new(header_text)
+        .block(Block::default().title("Header").borders(Borders::ALL));
+    f.render_widget(header, vertical[0]);
+
+    render_panel(f, "Left", horizontal[0], Color::Green, bg_color, fg_color);
+    render_panel(f, "Main", horizontal[1], border_color, bg_color, fg_color);
+    render_panel(f, "Right", horizontal[2], Color::Magenta, bg_color, fg_color);
 
     let footer_block = Block::default()
         .title("Footer")
@@ -175,23 +214,28 @@ fn ui(f: &mut Frame, app: &App) {
     let footer_inner = footer_block.inner(vertical[2]);
     f.render_widget(footer_block, vertical[2]);
 
-    let help = Paragraph::new(
-        "[h/l/r/f] toggle  [Space] all  [↑] close header + open footer  [↓] close footer + open header  [←] toggle left / open right if left closed  [→] toggle right / open left if right closed  [q] quit",
-    )
-    .alignment(Alignment::Center);
+    let help = Paragraph::new("Accessibility mode adds larger panels and high-contrast colors.")
+        .alignment(Alignment::Center);
     f.render_widget(help, footer_inner);
 }
 
-fn render_panel(f: &mut Frame, title: &str, area: Rect, color: Color) {
+fn render_panel(f: &mut Frame, title: &str, area: Rect, border_color: Color, bg_color: Color, fg_color: Color) {
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(color));
+        .border_style(Style::default().fg(border_color))
+        .style(Style::default().bg(bg_color).fg(fg_color));
     let inner = block.inner(area);
     f.render_widget(block, area);
 
     if inner.width > 0 && inner.height > 0 {
-        let text = Paragraph::new(format!("{} area", title)).alignment(Alignment::Center);
+        let text = Paragraph::new(format!("{} area", title))
+            .alignment(Alignment::Center)
+            .style(Style::default().bg(bg_color).fg(fg_color));
         f.render_widget(text, inner);
     }
+}
+
+fn lerp(a: f64, b: f64, t: f64) -> f64 {
+    a + (b - a) * t
 }
