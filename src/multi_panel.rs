@@ -476,14 +476,11 @@ fn help_text() -> Text<'static> {
     ];
 
     for (key, action) in rows {
-        lines.push(
-            Line::from(vec![
-                Span::styled(format!("{:>12}", key), Style::default().fg(Color::Yellow)),
-                Span::raw("  "),
-                Span::styled(action, Style::default().fg(Color::White)),
-            ])
-            .centered(),
-        );
+        lines.push(Line::from(vec![
+            Span::styled(format!("{:>12}", key), Style::default().fg(Color::Yellow)),
+            Span::raw("  "),
+            Span::styled(action, Style::default().fg(Color::White)),
+        ]));
     }
 
     Text::from(lines)
@@ -1060,7 +1057,7 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
                 Smooth animations\n\
                 Multi-panel widget\n\
                 FFI bindings";
-            let p = Paragraph::new(text).alignment(Alignment::Center);
+            let p = Paragraph::new(text).alignment(Alignment::Left);
             Widget::render(p, area, buf);
         })
         .right_content(|_state, area, buf| {
@@ -1068,12 +1065,12 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
                 Try Shift+C for colors\n\
                 Try Shift+M for charts\n\
                 Try Shift+H to hide grid";
-            let p = Paragraph::new(text).alignment(Alignment::Center);
+            let p = Paragraph::new(text).alignment(Alignment::Left);
             Widget::render(p, area, buf);
         })
         .main_content(|_state, area, buf| {
             let p = Paragraph::new(help_text())
-                .alignment(Alignment::Center)
+                .alignment(Alignment::Left)
                 .block(Block::default().borders(Borders::ALL));
             Widget::render(p, area, buf);
         })
