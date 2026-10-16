@@ -60,6 +60,9 @@ fn run_app(
             if matches!(key.code, crossterm::event::KeyCode::Char('q') | crossterm::event::KeyCode::Esc) {
                 break;
             }
+            // Repaint immediately after a key press so state changes (like
+            // starting test mode) are visible right away.
+            terminal.draw(|f| app.render(f))?;
         }
     }
     Ok(())
