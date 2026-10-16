@@ -941,11 +941,11 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             let p = Paragraph::new(help).alignment(Alignment::Center);
             Widget::render(p, bottom, buf);
         })
-        .header_color(Color::Blue)
-        .left_color(Color::Green)
-        .right_color(Color::Magenta)
-        .footer_color(Color::Yellow)
-        .main_color(Color::Reset)
+        .header_color(color_demo_color.unwrap_or(Color::Blue))
+        .left_color(color_demo_color.unwrap_or(Color::Green))
+        .right_color(color_demo_color.unwrap_or(Color::Magenta))
+        .footer_color(color_demo_color.unwrap_or(Color::Yellow))
+        .main_color(color_demo_color.unwrap_or(Color::Reset))
         .header_height(header_height)
         .footer_height(footer_height)
         .left_sidebar_width_fraction(left_fraction)
