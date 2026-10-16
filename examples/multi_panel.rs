@@ -14,6 +14,7 @@ use crossterm::{
 };
 use ratatui::{
     backend::CrosstermBackend,
+    layout::Rect,
     style::Color,
     Terminal,
 };
@@ -126,6 +127,22 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
         .right_title("Right")
         .main_title("Main")
         .footer_title("Footer")
+        .header_content(|_state, area, buf| {
+            // Float at the top of the header.
+            let top = Rect::new(area.x, area.y, area.width, 1.min(area.height));
+            let p = ratatui::widgets::Paragraph::new("↑ top").alignment(ratatui::layout::Alignment::Center);
+            ratatui::widgets::Widget::render(p, top, buf);
+        })
+        .left_content(|_state, area, buf| {
+            let p = ratatui::widgets::Paragraph::new("← left")
+                .alignment(ratatui::layout::Alignment::Left);
+            ratatui::widgets::Widget::render(p, area, buf);
+        })
+        .right_content(|_state, area, buf| {
+            let p = ratatui::widgets::Paragraph::new("right →")
+                .alignment(ratatui::layout::Alignment::Right);
+            ratatui::widgets::Widget::render(p, area, buf);
+        })
         .main_content(|state, area, buf| {
             let fraction = 0.25;
             let left = state.left_sidebar_width(area.width, fraction);
@@ -148,8 +165,15 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
             ratatui::widgets::Widget::render(p, area, buf);
         })
         .footer_content(move |_state, area, buf| {
+            // Float at the bottom of the footer.
+            let bottom = Rect::new(
+                area.x,
+                area.y + area.height.saturating_sub(1),
+                area.width,
+                1.min(area.height),
+            );
             let p = ratatui::widgets::Paragraph::new(help).alignment(ratatui::layout::Alignment::Center);
-            ratatui::widgets::Widget::render(p, area, buf);
+            ratatui::widgets::Widget::render(p, bottom, buf);
         })
         .header_color(Color::Blue)
         .left_color(Color::Green)
