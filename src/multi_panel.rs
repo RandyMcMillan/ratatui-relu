@@ -21,7 +21,7 @@ use ratatui::{
 use crate::animation::Transition;
 
 /// Mutable state for [`MultiPanel`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MultiPanelState {
     pub header: Transition,
     pub left_sidebar: Transition,
@@ -66,6 +66,30 @@ impl MultiPanelState {
         self.left_sidebar.toggle_between(0.0, 1.0);
         self.right_sidebar.toggle_between(0.0, 1.0);
         self.footer.toggle_between(0.0, 1.0);
+    }
+
+    /// Load state from the default config file, or return `None` if it does not
+    /// exist or cannot be parsed.
+    pub fn load() -> Option<Self> {
+        let path = Self::config_path()?;
+        let bytes = std::fs::read(&path).ok()?;
+        serde_json::from_slice(&bytes).ok()
+    }
+
+    /// Save state to the default config file.
+    pub fn save(&self) -> std::io::Result<()> {
+        let path = Self::config_path().ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "could not determine config directory")
+        })?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&path, serde_json::to_vec_pretty(self)?)
+    }
+
+    /// Path to the default state file: `~/.config/ratarelu/multi_panel_state.json`.
+    pub fn config_path() -> Option<std::path::PathBuf> {
+        dirs::config_dir().map(|d| d.join("ratarelu").join("multi_panel_state.json"))
     }
 }
 

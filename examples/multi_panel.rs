@@ -27,8 +27,10 @@ struct App {
 
 impl App {
     fn new() -> Self {
+        // Try to restore previous panel state; fall back to all panels open.
+        let state = MultiPanelState::load().unwrap_or_else(|| MultiPanelState::open(4.0));
         Self {
-            state: MultiPanelState::open(4.0),
+            state,
             should_quit: false,
         }
     }
@@ -54,11 +56,16 @@ fn main() -> io::Result<()> {
     let mut terminal = setup_terminal()?;
     let app = App::new();
     let result = run_app(&mut terminal, app);
+    // Persist the panel state on exit. Ignore save errors so the terminal is
+    // always restored cleanly.
+    if let Ok(ref app) = result {
+        let _ = app.state.save();
+    }
     restore_terminal(&mut terminal)?;
-    result
+    result.map(|_| ())
 }
 
-fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> io::Result<()> {
+fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> io::Result<App> {
     let mut last_tick = Instant::now();
     while !app.should_quit {
         let now = Instant::now();
@@ -105,7 +112,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> i
             }
         }
     }
-    Ok(())
+    Ok(app)
 }
 
 fn ui(f: &mut ratatui::Frame, app: &mut App) {

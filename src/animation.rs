@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 /// A value that moves smoothly towards a target over time.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Transition {
     current: f64,
     target: f64,
