@@ -1,53 +1,40 @@
 //! Multi-panel layout controlled by independent animated transitions.
 //!
-//! Each panel uses a [`Transition`] to smoothly open and close instead of
-//! snapping instantly.
+//! Demonstrates the reusable [`MultiPanel`] widget from `ratarelu::multi_panel`.
 //!
 //! Run in a real terminal with: cargo run --example multi_panel
 
-use std::io::{self, Stdout, stdout};
+use std::io::{self, stdout, Stdout};
 use std::time::{Duration, Instant};
 
 use crossterm::{
-    ExecutableCommand,
     event::{self, Event, KeyCode, KeyEventKind},
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    ExecutableCommand,
 };
 use ratatui::{
-    Frame, Terminal,
     backend::CrosstermBackend,
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
-    widgets::{Block, Borders, Paragraph},
+    style::Color,
+    Terminal,
 };
 
-use ratarelu::animation::Transition;
+use ratarelu::multi_panel::{MultiPanel, MultiPanelState};
 
 struct App {
-    header: Transition,
-    left_sidebar: Transition,
-    right_sidebar: Transition,
-    footer: Transition,
+    state: MultiPanelState,
     should_quit: bool,
 }
 
 impl App {
     fn new() -> Self {
         Self {
-            // Start all panels open.
-            header: Transition::new(1.0, 4.0),
-            left_sidebar: Transition::new(1.0, 4.0),
-            right_sidebar: Transition::new(1.0, 4.0),
-            footer: Transition::new(1.0, 4.0),
+            state: MultiPanelState::open(4.0),
             should_quit: false,
         }
     }
 
     fn update(&mut self, dt: Duration) {
-        self.header.update(dt);
-        self.left_sidebar.update(dt);
-        self.right_sidebar.update(dt);
-        self.footer.update(dt);
+        self.state.update(dt);
     }
 }
 
@@ -65,13 +52,13 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Re
 
 fn main() -> io::Result<()> {
     let mut terminal = setup_terminal()?;
-    let mut app = App::new();
-    let result = run_app(&mut terminal, &mut app);
+    let app = App::new();
+    let result = run_app(&mut terminal, app);
     restore_terminal(&mut terminal)?;
     result
 }
 
-fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> io::Result<()> {
+fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> io::Result<()> {
     let mut last_tick = Instant::now();
     while !app.should_quit {
         let now = Instant::now();
@@ -79,7 +66,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
         last_tick = now;
 
         app.update(dt);
-        terminal.draw(|f| ui(f, app))?;
+        terminal.draw(|f| ui(f, &mut app))?;
 
         if event::poll(Duration::from_millis(16))?
             && let Event::Key(key) = event::read()?
@@ -87,36 +74,31 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
         {
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
-                KeyCode::Char('h') => app.header.toggle_between(0.0, 1.0),
-                KeyCode::Char('l') => app.left_sidebar.toggle_between(0.0, 1.0),
-                KeyCode::Char('r') => app.right_sidebar.toggle_between(0.0, 1.0),
-                KeyCode::Char('f') => app.footer.toggle_between(0.0, 1.0),
-                KeyCode::Char(' ') => {
-                    app.header.toggle_between(0.0, 1.0);
-                    app.left_sidebar.toggle_between(0.0, 1.0);
-                    app.right_sidebar.toggle_between(0.0, 1.0);
-                    app.footer.toggle_between(0.0, 1.0);
-                }
+                KeyCode::Char('h') => app.state.header.toggle_between(0.0, 1.0),
+                KeyCode::Char('l') => app.state.left_sidebar.toggle_between(0.0, 1.0),
+                KeyCode::Char('r') => app.state.right_sidebar.toggle_between(0.0, 1.0),
+                KeyCode::Char('f') => app.state.footer.toggle_between(0.0, 1.0),
+                KeyCode::Char(' ') => app.state.toggle_all(),
                 KeyCode::Up => {
-                    app.header.set_target(0.0);
-                    app.footer.set_target(1.0);
+                    app.state.header.set_target(0.0);
+                    app.state.footer.set_target(1.0);
                 }
                 KeyCode::Down => {
-                    app.footer.set_target(0.0);
-                    app.header.set_target(1.0);
+                    app.state.footer.set_target(0.0);
+                    app.state.header.set_target(1.0);
                 }
                 KeyCode::Right => {
-                    if app.right_sidebar.current() < 0.5 {
-                        app.left_sidebar.set_target(1.0);
+                    if app.state.right_sidebar.current() < 0.5 {
+                        app.state.left_sidebar.set_target(1.0);
                     } else {
-                        app.right_sidebar.toggle_between(0.0, 1.0);
+                        app.state.right_sidebar.toggle_between(0.0, 1.0);
                     }
                 }
                 KeyCode::Left => {
-                    if app.left_sidebar.current() < 0.5 {
-                        app.right_sidebar.set_target(1.0);
+                    if app.state.left_sidebar.current() < 0.5 {
+                        app.state.right_sidebar.set_target(1.0);
                     } else {
-                        app.left_sidebar.toggle_between(0.0, 1.0);
+                        app.state.left_sidebar.toggle_between(0.0, 1.0);
                     }
                 }
                 _ => {}
@@ -126,61 +108,25 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> 
     Ok(())
 }
 
-fn ui(f: &mut Frame, app: &App) {
+fn ui(f: &mut ratatui::Frame, app: &mut App) {
     let area = f.area();
 
-    let header_height = (app.header.current() * 5.0).round() as u16;
-    let footer_height = (app.footer.current() * 5.0).round() as u16;
-    let left_width = (app.left_sidebar.current() * area.width as f64 * 0.25).round() as u16;
-    let right_width = (app.right_sidebar.current() * area.width as f64 * 0.25).round() as u16;
+    let help = "[h/l/r/f] toggle  [Space] all  [↑] close header + open footer  [↓] close footer + open header  [←] toggle left / open right if left closed  [→] toggle right / open left if right closed  [q] quit";
 
-    let vertical = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(header_height),
-            Constraint::Min(0),
-            Constraint::Length(footer_height),
-        ])
-        .split(area);
+    let widget = MultiPanel::new()
+        .header_title("Header")
+        .left_title("Left")
+        .right_title("Right")
+        .main_title("Main")
+        .footer_title("Footer")
+        .footer_content(help)
+        .header_color(Color::Blue)
+        .left_color(Color::Green)
+        .right_color(Color::Magenta)
+        .footer_color(Color::Yellow)
+        .main_color(Color::Reset)
+        .panel_height(5)
+        .sidebar_width_fraction(0.25);
 
-    let horizontal = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(left_width),
-            Constraint::Min(0),
-            Constraint::Length(right_width),
-        ])
-        .split(vertical[1]);
-
-    render_panel(f, "Header", vertical[0], Color::Blue);
-    render_panel(f, "Left", horizontal[0], Color::Green);
-    render_panel(f, "Main", horizontal[1], Color::Reset);
-    render_panel(f, "Right", horizontal[2], Color::Magenta);
-
-    let footer_block = Block::default()
-        .title("Footer")
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Yellow));
-    let footer_inner = footer_block.inner(vertical[2]);
-    f.render_widget(footer_block, vertical[2]);
-
-    let help = Paragraph::new(
-        "[h/l/r/f] toggle  [Space] all  [↑] close header + open footer  [↓] close footer + open header  [←] toggle left / open right if left closed  [→] toggle right / open left if right closed  [q] quit",
-    )
-    .alignment(Alignment::Center);
-    f.render_widget(help, footer_inner);
-}
-
-fn render_panel(f: &mut Frame, title: &str, area: Rect, color: Color) {
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(color));
-    let inner = block.inner(area);
-    f.render_widget(block, area);
-
-    if inner.width > 0 && inner.height > 0 {
-        let text = Paragraph::new(format!("{} area", title)).alignment(Alignment::Center);
-        f.render_widget(text, inner);
-    }
+    f.render_stateful_widget(widget, area, &mut app.state);
 }
