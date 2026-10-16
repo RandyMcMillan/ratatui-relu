@@ -15,8 +15,8 @@ use ratatui::{
     Frame,
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
-    text::Text,
+    style::{Color, Modifier, Style, Stylize},
+    text::{Line, Span, Text},
     widgets::{Block, Borders, Clear, Paragraph, StatefulWidget, Widget},
 };
 
@@ -450,17 +450,44 @@ fn render_panel(
 /// Keys simulated during test mode.
 pub const TEST_KEYS: [KeyCode; 4] = [KeyCode::Left, KeyCode::Right, KeyCode::Up, KeyCode::Down];
 
-const HELP_TEXT: &str = "ratatui-relu shortcuts\n\n\
-    h/l/r/f     toggle header / left / right / footer\n\
-    Space       toggle all panels\n\
-    ↑ / ↓       close top / bottom and boost opposite\n\
-    ← / →       close side and boost opposite\n\
-    Shift+H     hide / show inner grid\n\
-    Shift+T     start / stop automated test matrix\n\
-    Shift+C     toggle color transition demo\n\
-    Shift+M     toggle chart dashboard\n\
-    \\           toggle this help overlay\n\
-    q / Esc     quit";
+fn help_text() -> Text<'static> {
+    let mut lines = Vec::new();
+    lines.push(
+        Line::from(
+            "ratatui-relu shortcuts"
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+        .centered(),
+    );
+    lines.push(Line::default());
+
+    let rows = [
+        ("h / l / r / f", "toggle header / left / right / footer"),
+        ("Space", "toggle all panels"),
+        ("↑ / ↓", "close top / bottom and boost opposite"),
+        ("← / →", "close side and boost opposite"),
+        ("Shift+H", "hide / show inner grid"),
+        ("Shift+T", "start / stop automated test matrix"),
+        ("Shift+C", "toggle color transition demo"),
+        ("Shift+M", "toggle chart dashboard"),
+        ("\\", "toggle this help overlay"),
+        ("q / Esc", "quit"),
+    ];
+
+    for (key, action) in rows {
+        lines.push(
+            Line::from(vec![
+                Span::styled(format!("{:>12}", key), Style::default().fg(Color::Yellow)),
+                Span::raw("  "),
+                Span::styled(action, Style::default().fg(Color::White)),
+            ])
+            .centered(),
+        );
+    }
+
+    Text::from(lines)
+}
 
 // State bit indices for matrix operations.
 // Panel bits:
@@ -501,6 +528,14 @@ impl MultiPanelAppConfig {
     pub fn demo() -> Self {
         Self {
             widget_builder: Box::new(demo_widget_builder),
+            save_path: None,
+        }
+    }
+
+    /// Create a config that renders the help overlay as a multi-panel layout.
+    pub fn help() -> Self {
+        Self {
+            widget_builder: Box::new(help_widget_builder),
             save_path: None,
         }
     }
@@ -852,10 +887,10 @@ impl MultiPanelApp {
         if self.show_help {
             let area = f.area();
             Clear.render(area, f.buffer_mut());
-            let help = Paragraph::new(HELP_TEXT)
-                .alignment(Alignment::Center)
-                .block(Block::default().title("Help").borders(Borders::ALL));
-            f.render_widget(help, area);
+            let mut help_state = MultiPanelState::open(8.0);
+            let help_config = MultiPanelAppConfig::help();
+            let widget = (help_config.widget_builder)(self);
+            f.render_stateful_widget(widget, area, &mut help_state);
         } else {
             let widget = (self.config.widget_builder)(self);
             f.render_stateful_widget(widget, f.area(), &mut self.state);
@@ -1003,6 +1038,56 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         .footer_height(footer_height)
         .left_sidebar_width_fraction(left_fraction)
         .right_sidebar_width_fraction(right_fraction)
+}
+
+/// The built-in help widget builder. Renders the help text inside a
+/// multi-panel layout.
+pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
+    MultiPanel::new()
+        .header_title("Help")
+        .left_title("About")
+        .right_title("Tips")
+        .main_title("Shortcuts")
+        .footer_title("Press \\ to close")
+        .header_content(|_state, area, buf| {
+            let p = Paragraph::new("ratatui-relu help overlay")
+                .alignment(Alignment::Center)
+                .fg(Color::Cyan);
+            Widget::render(p, area, buf);
+        })
+        .left_content(|_state, area, buf| {
+            let text = "ReLU-gated layout transitions\n\
+                Smooth animations\n\
+                Multi-panel widget\n\
+                FFI bindings";
+            let p = Paragraph::new(text).alignment(Alignment::Center);
+            Widget::render(p, area, buf);
+        })
+        .right_content(|_state, area, buf| {
+            let text = "Try Shift+T for test mode\n\
+                Try Shift+C for colors\n\
+                Try Shift+M for charts\n\
+                Try Shift+H to hide grid";
+            let p = Paragraph::new(text).alignment(Alignment::Center);
+            Widget::render(p, area, buf);
+        })
+        .main_content(|_state, area, buf| {
+            let p = Paragraph::new(help_text())
+                .alignment(Alignment::Center)
+                .block(Block::default().borders(Borders::ALL));
+            Widget::render(p, area, buf);
+        })
+        .footer_content(|_state, area, buf| {
+            let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
+            Widget::render(p, area, buf);
+        })
+        .header_color(Color::Cyan)
+        .left_color(Color::Green)
+        .right_color(Color::Magenta)
+        .main_color(Color::Reset)
+        .footer_color(Color::Yellow)
+        .panel_height(3)
+        .sidebar_width_fraction(0.2)
 }
 
 /// Encode panel targets and boost flags into an 8-bit state vector.
