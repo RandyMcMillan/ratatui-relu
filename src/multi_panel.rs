@@ -62,6 +62,14 @@ impl MultiPanelState {
         self.footer.update(dt);
     }
 
+    /// Snap all panel transitions to their targets instantly.
+    pub fn snap(&mut self) {
+        self.header.snap();
+        self.left_sidebar.snap();
+        self.right_sidebar.snap();
+        self.footer.snap();
+    }
+
     /// Toggle all panels at once.
     pub fn toggle_all(&mut self) {
         self.header.toggle_between(0.0, 1.0);
@@ -610,6 +618,7 @@ impl MultiPanelApp {
         if let Some((state, step)) = advance {
             if step == 0 {
                 set_state_bits(self, state);
+                self.state.snap();
             }
             self.handle_key(TEST_KEYS[step as usize]);
         }
@@ -628,6 +637,7 @@ impl MultiPanelApp {
             timer: Duration::ZERO,
         });
         set_state_bits(self, 0);
+        self.state.snap();
     }
 
     /// Stop automated test mode.

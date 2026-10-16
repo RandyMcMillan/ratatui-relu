@@ -50,6 +50,11 @@ impl Transition {
         (self.current - self.target).abs() < f64::EPSILON
     }
 
+    /// Snap the current value to the target immediately.
+    pub fn snap(&mut self) {
+        self.current = self.target;
+    }
+
     /// Advance the transition by `dt`, moving the current value towards the target.
     pub fn update(&mut self, dt: Duration) {
         let step = self.speed * dt.as_secs_f64();

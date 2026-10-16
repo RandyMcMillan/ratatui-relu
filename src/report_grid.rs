@@ -134,6 +134,10 @@ fn split_three(area: Rect) -> std::rc::Rc<[Rect]> {
 }
 
 fn subwidget(title: &str, value: String, area: Rect, buf: &mut Buffer) {
+    // A bordered widget needs at least 2×2 cells to render without artifacts.
+    if area.width < 2 || area.height < 2 {
+        return;
+    }
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
