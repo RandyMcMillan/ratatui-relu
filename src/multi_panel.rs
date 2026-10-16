@@ -91,13 +91,43 @@ impl MultiPanelState {
     pub fn config_path() -> Option<std::path::PathBuf> {
         dirs::config_dir().map(|d| d.join("ratarelu").join("multi_panel_state.json"))
     }
+
+    /// Current header/footer height in rows when `panel_height` is fully open.
+    pub fn header_height(&self, panel_height: u16) -> u16 {
+        (self.header.current() * panel_height as f64).round() as u16
+    }
+
+    /// Current footer height in rows when `panel_height` is fully open.
+    pub fn footer_height(&self, panel_height: u16) -> u16 {
+        (self.footer.current() * panel_height as f64).round() as u16
+    }
+
+    /// Current left sidebar width in columns for the given total width.
+    pub fn left_sidebar_width(&self, total_width: u16, fraction: f64) -> u16 {
+        (self.left_sidebar.current() * total_width as f64 * fraction).round() as u16
+    }
+
+    /// Current right sidebar width in columns for the given total width.
+    pub fn right_sidebar_width(&self, total_width: u16, fraction: f64) -> u16 {
+        (self.right_sidebar.current() * total_width as f64 * fraction).round() as u16
+    }
+
+    /// Current main content width in columns for the given total width.
+    pub fn main_width(&self, total_width: u16, fraction: f64) -> u16 {
+        total_width
+            .saturating_sub(self.left_sidebar_width(total_width, fraction))
+            .saturating_sub(self.right_sidebar_width(total_width, fraction))
+    }
 }
 
 /// Owned custom content renderer for a panel inside [`MultiPanel`].
-pub type PanelContent = Box<dyn Fn(Rect, &mut Buffer)>;
+///
+/// Receives a shared reference to the full [`MultiPanelState`] so the content
+/// can react to other panels' open/close dimensions.
+pub type PanelContent = Box<dyn Fn(&MultiPanelState, Rect, &mut Buffer)>;
 
 /// Borrowed custom content renderer for a panel inside [`MultiPanel`].
-pub type PanelContentRef<'a> = Option<&'a dyn Fn(Rect, &mut Buffer)>;
+pub type PanelContentRef<'a> = Option<&'a dyn Fn(&MultiPanelState, Rect, &mut Buffer)>;
 
 /// Configuration for [`MultiPanel`].
 #[derive(Default)]
@@ -180,7 +210,7 @@ impl MultiPanel {
     /// Builder-style setter for custom header content.
     pub fn header_content<F>(mut self, content: F) -> Self
     where
-        F: Fn(Rect, &mut Buffer) + 'static,
+        F: Fn(&MultiPanelState, Rect, &mut Buffer) + 'static,
     {
         self.header_content = Some(Box::new(content));
         self
@@ -189,7 +219,7 @@ impl MultiPanel {
     /// Builder-style setter for custom left sidebar content.
     pub fn left_content<F>(mut self, content: F) -> Self
     where
-        F: Fn(Rect, &mut Buffer) + 'static,
+        F: Fn(&MultiPanelState, Rect, &mut Buffer) + 'static,
     {
         self.left_content = Some(Box::new(content));
         self
@@ -198,7 +228,7 @@ impl MultiPanel {
     /// Builder-style setter for custom right sidebar content.
     pub fn right_content<F>(mut self, content: F) -> Self
     where
-        F: Fn(Rect, &mut Buffer) + 'static,
+        F: Fn(&MultiPanelState, Rect, &mut Buffer) + 'static,
     {
         self.right_content = Some(Box::new(content));
         self
@@ -207,7 +237,7 @@ impl MultiPanel {
     /// Builder-style setter for custom main panel content.
     pub fn main_content<F>(mut self, content: F) -> Self
     where
-        F: Fn(Rect, &mut Buffer) + 'static,
+        F: Fn(&MultiPanelState, Rect, &mut Buffer) + 'static,
     {
         self.main_content = Some(Box::new(content));
         self
@@ -216,7 +246,7 @@ impl MultiPanel {
     /// Builder-style setter for custom footer content.
     pub fn footer_content<F>(mut self, content: F) -> Self
     where
-        F: Fn(Rect, &mut Buffer) + 'static,
+        F: Fn(&MultiPanelState, Rect, &mut Buffer) + 'static,
     {
         self.footer_content = Some(Box::new(content));
         self
@@ -297,6 +327,7 @@ impl StatefulWidget for MultiPanel {
             &self.header_title,
             vertical[0],
             self.header_color,
+            state,
             self.header_content.as_deref(),
         );
         render_panel(
@@ -304,6 +335,7 @@ impl StatefulWidget for MultiPanel {
             &self.left_title,
             horizontal[0],
             self.left_color,
+            state,
             self.left_content.as_deref(),
         );
         render_panel(
@@ -311,6 +343,7 @@ impl StatefulWidget for MultiPanel {
             &self.main_title,
             horizontal[1],
             self.main_color,
+            state,
             self.main_content.as_deref(),
         );
         render_panel(
@@ -318,6 +351,7 @@ impl StatefulWidget for MultiPanel {
             &self.right_title,
             horizontal[2],
             self.right_color,
+            state,
             self.right_content.as_deref(),
         );
         render_panel(
@@ -325,6 +359,7 @@ impl StatefulWidget for MultiPanel {
             &self.footer_title,
             vertical[2],
             self.footer_color,
+            state,
             self.footer_content.as_deref(),
         );
     }
@@ -335,6 +370,7 @@ fn render_panel(
     title: &str,
     area: Rect,
     color: Color,
+    state: &MultiPanelState,
     content: PanelContentRef<'_>,
 ) {
     let block = Block::default()
@@ -346,7 +382,7 @@ fn render_panel(
 
     if inner.width > 0 && inner.height > 0 {
         match content {
-            Some(render) => render(inner, buf),
+            Some(render) => render(state, inner, buf),
             None => {
                 let text = Paragraph::new(Text::from(format!("{} area", title)))
                     .alignment(Alignment::Center);
@@ -379,7 +415,7 @@ mod tests {
     #[test]
     fn multi_panel_renders_custom_content() {
         let mut state = MultiPanelState::open(4.0);
-        let widget = MultiPanel::new().main_content(|area, buf| {
+        let widget = MultiPanel::new().main_content(|_state, area, buf| {
             let p = Paragraph::new("custom").alignment(Alignment::Center);
             Widget::render(p, area, buf);
         });

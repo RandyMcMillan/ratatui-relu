@@ -126,7 +126,7 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
         .right_title("Right")
         .main_title("Main")
         .footer_title("Footer")
-        .footer_content(move |area, buf| {
+        .footer_content(move |_state, area, buf| {
             let p = ratatui::widgets::Paragraph::new(help).alignment(ratatui::layout::Alignment::Center);
             ratatui::widgets::Widget::render(p, area, buf);
         })
