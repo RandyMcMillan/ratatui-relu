@@ -12,6 +12,14 @@ use ratatui::{
 
 use crate::multi_panel::MultiPanelState;
 
+/// Vertical alignment for positioning value text inside a grid cell.
+#[derive(Clone, Copy)]
+enum VerticalAlign {
+    Top,
+    Center,
+    Bottom,
+}
+
 /// Renders a 3×3 grid of sub-widgets, each reporting a neighbor's size.
 #[derive(Debug, Clone)]
 pub struct NeighborReportGrid {
@@ -75,74 +83,92 @@ impl StatefulWidget for NeighborReportGrid {
         let cell_color = self.cell_color;
 
         subwidget(
-            "Top-Left",
+            Some("Top-Left"),
             format!("{}x{}", cols_top[0].width, cols_top[0].height),
+            Alignment::Left,
+            VerticalAlign::Top,
             cols_top[0],
             buf,
             cell_color,
         );
         subwidget(
-            "Top",
+            Some("Top"),
             format!("{} rows", state.header_height(self.header_height)),
+            Alignment::Center,
+            VerticalAlign::Top,
             cols_top[1],
             buf,
             cell_color,
         );
         subwidget(
-            "Top-Right",
+            Some("Top-Right"),
             format!("{}x{}", cols_top[2].width, cols_top[2].height),
+            Alignment::Right,
+            VerticalAlign::Top,
             cols_top[2],
             buf,
             cell_color,
         );
 
         subwidget(
-            "Left",
+            Some("Left"),
             format!(
                 "{} cols",
                 state.left_sidebar_width(area.width, self.left_fraction)
             ),
+            Alignment::Left,
+            VerticalAlign::Center,
             cols_mid[0],
             buf,
             cell_color,
         );
         subwidget(
-            "Center",
+            None,
             self.center_content
                 .clone()
                 .unwrap_or_else(|| format!("{}x{}", area.width, area.height)),
+            Alignment::Center,
+            VerticalAlign::Center,
             cols_mid[1],
             buf,
             cell_color,
         );
         subwidget(
-            "Right",
+            Some("Right"),
             format!(
                 "{} cols",
                 state.right_sidebar_width(area.width, self.right_fraction)
             ),
+            Alignment::Right,
+            VerticalAlign::Center,
             cols_mid[2],
             buf,
             cell_color,
         );
 
         subwidget(
-            "Bot-Left",
+            Some("Bot-Left"),
             format!("{}x{}", cols_bot[0].width, cols_bot[0].height),
+            Alignment::Left,
+            VerticalAlign::Bottom,
             cols_bot[0],
             buf,
             cell_color,
         );
         subwidget(
-            "Bottom",
+            Some("Bottom"),
             format!("{} rows", state.footer_height(self.footer_height)),
+            Alignment::Center,
+            VerticalAlign::Bottom,
             cols_bot[1],
             buf,
             cell_color,
         );
         subwidget(
-            "Bot-Right",
+            Some("Bot-Right"),
             format!("{}x{}", cols_bot[2].width, cols_bot[2].height),
+            Alignment::Right,
+            VerticalAlign::Bottom,
             cols_bot[2],
             buf,
             cell_color,
@@ -161,9 +187,27 @@ fn split_three(area: Rect) -> std::rc::Rc<[Rect]> {
         .split(area)
 }
 
+fn value_area(inner: Rect, value: &str, valign: VerticalAlign) -> Rect {
+    let lines = value.lines().count() as u16;
+    let height = lines.min(inner.height);
+    let y = match valign {
+        VerticalAlign::Top => inner.y,
+        VerticalAlign::Center => inner.y + (inner.height.saturating_sub(height)) / 2,
+        VerticalAlign::Bottom => inner.y + inner.height.saturating_sub(height),
+    };
+    Rect {
+        x: inner.x,
+        y,
+        width: inner.width,
+        height,
+    }
+}
+
 fn subwidget(
-    title: &str,
+    title: Option<&str>,
     value: String,
+    align: Alignment,
+    valign: VerticalAlign,
     area: Rect,
     buf: &mut Buffer,
     cell_color: Option<Color>,
@@ -179,23 +223,28 @@ fn subwidget(
     const MIN_BORDER_WIDTH: u16 = 4;
     const MIN_BORDER_HEIGHT: u16 = 3;
     if area.width >= MIN_BORDER_WIDTH && area.height >= MIN_BORDER_HEIGHT {
-        let block = Block::default()
-            .title(title)
-            .borders(Borders::ALL)
-            .style(style);
+        let block = {
+            let b = Block::default().borders(Borders::ALL).style(style);
+            match title {
+                Some(t) => b.title(t),
+                None => b,
+            }
+        };
         let inner = block.inner(area);
         Widget::render(block, area, buf);
         if inner.width > 0 && inner.height > 0 {
+            let value_rect = value_area(inner, &value, valign);
             let p = Paragraph::new(Text::from(value))
-                .alignment(Alignment::Center)
+                .alignment(align)
                 .style(style);
-            Widget::render(p, inner, buf);
+            Widget::render(p, value_rect, buf);
         }
     } else {
-        let text = Text::from(format!("{}\n{}", title, value));
-        let p = Paragraph::new(text)
-            .alignment(Alignment::Center)
-            .style(style);
+        let text = match title {
+            Some(t) => Text::from(format!("{}\n{}", t, value)),
+            None => Text::from(value),
+        };
+        let p = Paragraph::new(text).alignment(align).style(style);
         Widget::render(p, area, buf);
     }
 }
