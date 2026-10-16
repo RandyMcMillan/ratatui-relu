@@ -28,7 +28,13 @@ struct App {
     right_boost: bool,
     top_boost: bool,
     bottom_boost: bool,
+    test_mode: Option<TestMode>,
     should_quit: bool,
+}
+
+struct TestMode {
+    permutation: u8,
+    timer: Duration,
 }
 
 impl App {
@@ -41,12 +47,47 @@ impl App {
             right_boost: false,
             top_boost: false,
             bottom_boost: false,
+            test_mode: None,
             should_quit: false,
         }
     }
 
     fn update(&mut self, dt: Duration) {
         self.state.update(dt);
+
+        let mut next: Option<u8> = None;
+        if let Some(test) = &mut self.test_mode {
+            test.timer += dt;
+            if test.timer >= Duration::from_millis(400) {
+                test.timer = Duration::ZERO;
+                test.permutation = (test.permutation + 1) % 16;
+                next = Some(test.permutation);
+            }
+        }
+        if let Some(p) = next {
+            self.apply_permutation(p);
+        }
+    }
+
+    fn start_test_mode(&mut self) {
+        self.test_mode = Some(TestMode {
+            permutation: 0,
+            timer: Duration::ZERO,
+        });
+        self.apply_permutation(0);
+    }
+
+    fn stop_test_mode(&mut self) {
+        self.test_mode = None;
+    }
+
+    fn apply_permutation(&mut self, permutation: u8) {
+        // bit 0 -> header, 1 -> left, 2 -> right, 3 -> footer
+        let open = |bit: u8| if (permutation >> bit) & 1 == 1 { 1.0 } else { 0.0 };
+        self.state.header.set_target(open(0));
+        self.state.left_sidebar.set_target(open(1));
+        self.state.right_sidebar.set_target(open(2));
+        self.state.footer.set_target(open(3));
     }
 
     fn left_sidebar_fraction(&self) -> f64 {
@@ -107,6 +148,13 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>, mut app: App) -> i
         {
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
+                KeyCode::Char('T') => {
+                    if app.test_mode.is_some() {
+                        app.stop_test_mode();
+                    } else {
+                        app.start_test_mode();
+                    }
+                }
                 KeyCode::Char('h') => app.state.header.toggle_between(0.0, 1.0),
                 KeyCode::Char('l') => app.state.left_sidebar.toggle_between(0.0, 1.0),
                 KeyCode::Char('r') => app.state.right_sidebar.toggle_between(0.0, 1.0),
@@ -169,8 +217,12 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
     let right_fraction = app.right_sidebar_fraction();
     let header_height = app.header_height();
     let footer_height = app.footer_height();
+    let test_label = app
+        .test_mode
+        .as_ref()
+        .map(|t| format!("TEST MODE permutation {}/16", t.permutation + 1));
 
-    let help = "[h/l/r/f] toggle  [Space] all  [↑] close top + boost bottom  [↓] close bottom + boost top  [←] close left + boost right  [→] close right + boost left  [q] quit";
+    let help = "[h/l/r/f] toggle  [Space] all  [↑] close top + boost bottom  [↓] close bottom + boost top  [←] close left + boost right  [→] close right + boost left  [Shift+T] test  [q] quit";
 
     let widget = MultiPanel::new()
         .header_title("Header")
@@ -178,10 +230,11 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
         .right_title("Right")
         .main_title("Main")
         .footer_title("Footer")
-        .header_content(|_state, area, buf| {
+        .header_content(move |_state, area, buf| {
             // Float at the top of the header.
             let top = Rect::new(area.x, area.y, area.width, 1.min(area.height));
-            let p = ratatui::widgets::Paragraph::new("↑ top").alignment(ratatui::layout::Alignment::Center);
+            let text = test_label.clone().unwrap_or_else(|| "↑ top".to_string());
+            let p = ratatui::widgets::Paragraph::new(text).alignment(ratatui::layout::Alignment::Center);
             ratatui::widgets::Widget::render(p, top, buf);
         })
         .left_content(|_state, area, buf| {
