@@ -122,12 +122,13 @@ impl MultiPanelState {
 
 /// Owned custom content renderer for a panel inside [`MultiPanel`].
 ///
-/// Receives a shared reference to the full [`MultiPanelState`] so the content
-/// can react to other panels' open/close dimensions.
-pub type PanelContent = Box<dyn Fn(&MultiPanelState, Rect, &mut Buffer)>;
+/// Receives a mutable reference to the full [`MultiPanelState`] so the content
+/// can react to other panels' open/close dimensions (or pass it along to
+/// nested stateful widgets).
+pub type PanelContent = Box<dyn Fn(&mut MultiPanelState, Rect, &mut Buffer)>;
 
 /// Borrowed custom content renderer for a panel inside [`MultiPanel`].
-pub type PanelContentRef<'a> = Option<&'a dyn Fn(&MultiPanelState, Rect, &mut Buffer)>;
+pub type PanelContentRef<'a> = Option<&'a dyn Fn(&mut MultiPanelState, Rect, &mut Buffer)>;
 
 /// Configuration for [`MultiPanel`].
 #[derive(Default)]
@@ -216,7 +217,7 @@ impl MultiPanel {
     /// Builder-style setter for custom header content.
     pub fn header_content<F>(mut self, content: F) -> Self
     where
-        F: Fn(&MultiPanelState, Rect, &mut Buffer) + 'static,
+        F: Fn(&mut MultiPanelState, Rect, &mut Buffer) + 'static,
     {
         self.header_content = Some(Box::new(content));
         self
@@ -225,7 +226,7 @@ impl MultiPanel {
     /// Builder-style setter for custom left sidebar content.
     pub fn left_content<F>(mut self, content: F) -> Self
     where
-        F: Fn(&MultiPanelState, Rect, &mut Buffer) + 'static,
+        F: Fn(&mut MultiPanelState, Rect, &mut Buffer) + 'static,
     {
         self.left_content = Some(Box::new(content));
         self
@@ -234,7 +235,7 @@ impl MultiPanel {
     /// Builder-style setter for custom right sidebar content.
     pub fn right_content<F>(mut self, content: F) -> Self
     where
-        F: Fn(&MultiPanelState, Rect, &mut Buffer) + 'static,
+        F: Fn(&mut MultiPanelState, Rect, &mut Buffer) + 'static,
     {
         self.right_content = Some(Box::new(content));
         self
@@ -243,7 +244,7 @@ impl MultiPanel {
     /// Builder-style setter for custom main panel content.
     pub fn main_content<F>(mut self, content: F) -> Self
     where
-        F: Fn(&MultiPanelState, Rect, &mut Buffer) + 'static,
+        F: Fn(&mut MultiPanelState, Rect, &mut Buffer) + 'static,
     {
         self.main_content = Some(Box::new(content));
         self
@@ -252,7 +253,7 @@ impl MultiPanel {
     /// Builder-style setter for custom footer content.
     pub fn footer_content<F>(mut self, content: F) -> Self
     where
-        F: Fn(&MultiPanelState, Rect, &mut Buffer) + 'static,
+        F: Fn(&mut MultiPanelState, Rect, &mut Buffer) + 'static,
     {
         self.footer_content = Some(Box::new(content));
         self
@@ -403,7 +404,7 @@ fn render_panel(
     title: &str,
     area: Rect,
     color: Color,
-    state: &MultiPanelState,
+    state: &mut MultiPanelState,
     content: PanelContentRef<'_>,
 ) {
     let block = Block::default()
@@ -455,4 +456,5 @@ mod tests {
         let mut buf = Buffer::empty(Rect::new(0, 0, 80, 24));
         StatefulWidget::render(widget, buf.area, &mut buf, &mut state);
     }
+
 }

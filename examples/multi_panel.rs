@@ -20,6 +20,7 @@ use ratatui::{
 };
 
 use ratarelu::multi_panel::{MultiPanel, MultiPanelState};
+use ratarelu::report_grid::NeighborReportGrid;
 
 struct App {
     state: MultiPanelState,
@@ -194,85 +195,13 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
             ratatui::widgets::Widget::render(p, area, buf);
         })
         .main_content(move |state, area, buf| {
-            // Split the main area into a 3x3 grid of sub-widgets.
-            let rows = ratatui::layout::Layout::default()
-                .direction(ratatui::layout::Direction::Vertical)
-                .constraints([
-                    ratatui::layout::Constraint::Ratio(1, 3),
-                    ratatui::layout::Constraint::Ratio(1, 3),
-                    ratatui::layout::Constraint::Ratio(1, 3),
-                ])
-                .split(area);
-
-            let cols_top = ratatui::layout::Layout::default()
-                .direction(ratatui::layout::Direction::Horizontal)
-                .constraints([
-                    ratatui::layout::Constraint::Ratio(1, 3),
-                    ratatui::layout::Constraint::Ratio(1, 3),
-                    ratatui::layout::Constraint::Ratio(1, 3),
-                ])
-                .split(rows[0]);
-            let cols_mid = ratatui::layout::Layout::default()
-                .direction(ratatui::layout::Direction::Horizontal)
-                .constraints([
-                    ratatui::layout::Constraint::Ratio(1, 3),
-                    ratatui::layout::Constraint::Ratio(1, 3),
-                    ratatui::layout::Constraint::Ratio(1, 3),
-                ])
-                .split(rows[1]);
-            let cols_bot = ratatui::layout::Layout::default()
-                .direction(ratatui::layout::Direction::Horizontal)
-                .constraints([
-                    ratatui::layout::Constraint::Ratio(1, 3),
-                    ratatui::layout::Constraint::Ratio(1, 3),
-                    ratatui::layout::Constraint::Ratio(1, 3),
-                ])
-                .split(rows[2]);
-
-            fn subwidget(title: &str, value: String, area: Rect, buf: &mut ratatui::buffer::Buffer) {
-                let block = ratatui::widgets::Block::default()
-                    .title(title)
-                    .borders(ratatui::widgets::Borders::ALL);
-                let inner = block.inner(area);
-                ratatui::widgets::Widget::render(block, area, buf);
-                if inner.width > 0 && inner.height > 0 {
-                    let p = ratatui::widgets::Paragraph::new(value)
-                        .alignment(ratatui::layout::Alignment::Center);
-                    ratatui::widgets::Widget::render(p, inner, buf);
-                }
-            }
-
-            subwidget("Top-Left", format!("{}x{}", cols_top[0].width, cols_top[0].height), cols_top[0], buf);
-            subwidget(
-                "Top",
-                format!("{} rows", state.header_height(header_height)),
-                cols_top[1],
-                buf,
+            let grid = NeighborReportGrid::new(
+                left_fraction,
+                right_fraction,
+                header_height,
+                footer_height,
             );
-            subwidget("Top-Right", format!("{}x{}", cols_top[2].width, cols_top[2].height), cols_top[2], buf);
-
-            subwidget(
-                "Left",
-                format!("{} cols", state.left_sidebar_width(area.width, left_fraction)),
-                cols_mid[0],
-                buf,
-            );
-            subwidget("Center", format!("{}x{}", area.width, area.height), cols_mid[1], buf);
-            subwidget(
-                "Right",
-                format!("{} cols", state.right_sidebar_width(area.width, right_fraction)),
-                cols_mid[2],
-                buf,
-            );
-
-            subwidget("Bot-Left", format!("{}x{}", cols_bot[0].width, cols_bot[0].height), cols_bot[0], buf);
-            subwidget(
-                "Bottom",
-                format!("{} rows", state.footer_height(footer_height)),
-                cols_bot[1],
-                buf,
-            );
-            subwidget("Bot-Right", format!("{}x{}", cols_bot[2].width, cols_bot[2].height), cols_bot[2], buf);
+            ratatui::widgets::StatefulWidget::render(grid, area, buf, state);
         })
         .footer_content(move |_state, area, buf| {
             // Float at the bottom of the footer.
