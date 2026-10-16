@@ -15,7 +15,7 @@ use ratatui::{
     Frame,
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style, Stylize},
+    style::{Color, Style, Stylize},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Clear, Paragraph, StatefulWidget, Widget},
 };
@@ -169,6 +169,10 @@ pub struct MultiPanel {
     pub left_sidebar_width_fraction: f64,
     /// Width of the right sidebar as a fraction of total width (0.0–1.0).
     pub right_sidebar_width_fraction: f64,
+    /// Minimum width of the left sidebar in columns.
+    pub left_sidebar_min_width: u16,
+    /// Minimum width of the right sidebar in columns.
+    pub right_sidebar_min_width: u16,
 }
 
 impl MultiPanel {
@@ -194,6 +198,8 @@ impl MultiPanel {
             footer_height: 5,
             left_sidebar_width_fraction: 0.25,
             right_sidebar_width_fraction: 0.25,
+            left_sidebar_min_width: 0,
+            right_sidebar_min_width: 0,
         }
     }
 
@@ -311,6 +317,25 @@ impl MultiPanel {
         self
     }
 
+    /// Builder-style setter for both sidebar minimum widths.
+    pub fn sidebar_min_width(mut self, width: u16) -> Self {
+        self.left_sidebar_min_width = width;
+        self.right_sidebar_min_width = width;
+        self
+    }
+
+    /// Builder-style setter for left sidebar minimum width.
+    pub fn left_sidebar_min_width(mut self, width: u16) -> Self {
+        self.left_sidebar_min_width = width;
+        self
+    }
+
+    /// Builder-style setter for right sidebar minimum width.
+    pub fn right_sidebar_min_width(mut self, width: u16) -> Self {
+        self.right_sidebar_min_width = width;
+        self
+    }
+
     /// Builder-style setter for header border color.
     pub fn header_color(mut self, color: Color) -> Self {
         self.header_color = color;
@@ -348,12 +373,16 @@ impl StatefulWidget for MultiPanel {
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let header_height = (state.header.current() * self.header_height as f64).round() as u16;
         let footer_height = (state.footer.current() * self.footer_height as f64).round() as u16;
-        let left_width =
-            (state.left_sidebar.current() * area.width as f64 * self.left_sidebar_width_fraction)
-                .round() as u16;
-        let right_width =
-            (state.right_sidebar.current() * area.width as f64 * self.right_sidebar_width_fraction)
-                .round() as u16;
+        let left_width = ((state.left_sidebar.current()
+            * area.width as f64
+            * self.left_sidebar_width_fraction)
+            .round() as u16)
+            .max(self.left_sidebar_min_width);
+        let right_width = ((state.right_sidebar.current()
+            * area.width as f64
+            * self.right_sidebar_width_fraction)
+            .round() as u16)
+            .max(self.right_sidebar_min_width);
 
         let vertical = Layout::default()
             .direction(Direction::Vertical)
@@ -466,9 +495,12 @@ fn help_text() -> Text<'static> {
         ("q / Esc", "quit"),
     ];
 
+    lines.push(Line::default());
+    lines.push(Line::default());
+
     for (key, action) in rows {
         lines.push(Line::from(vec![
-            Span::raw("  "),
+            Span::raw("    "),
             Span::styled(format!("{:>12}", key), Style::default().fg(Color::Yellow)),
             Span::raw("  "),
             Span::styled(action, Style::default().fg(Color::White)),
@@ -1032,6 +1064,16 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
 /// The built-in help widget builder. Renders the help text inside a
 /// multi-panel layout.
 pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
+    let left_text = "\n\n    ReLU-gated layout transitions\n    Smooth animations\n    Multi-panel widget\n    FFI bindings";
+    let right_text = "\n\n    Try Shift+T for test mode\n    Try Shift+C for colors\n    Try Shift+M for charts\n    Try Shift+H to hide grid";
+    let line_width = |text: &str| {
+        text.lines()
+            .map(|line| line.len() as u16)
+            .max()
+            .unwrap_or(0)
+            + 5
+    };
+
     MultiPanel::new()
         .header_title("Help")
         .left_title("About")
@@ -1044,14 +1086,12 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
                 .fg(Color::Cyan);
             Widget::render(p, area, buf);
         })
-        .left_content(|_state, area, buf| {
-            let text = "  ReLU-gated layout transitions\n  Smooth animations\n  Multi-panel widget\n  FFI bindings";
-            let p = Paragraph::new(text).alignment(Alignment::Left);
+        .left_content(move |_state, area, buf| {
+            let p = Paragraph::new(left_text).alignment(Alignment::Left);
             Widget::render(p, area, buf);
         })
-        .right_content(|_state, area, buf| {
-            let text = "  Try Shift+T for test mode\n  Try Shift+C for colors\n  Try Shift+M for charts\n  Try Shift+H to hide grid";
-            let p = Paragraph::new(text).alignment(Alignment::Left);
+        .right_content(move |_state, area, buf| {
+            let p = Paragraph::new(right_text).alignment(Alignment::Left);
             Widget::render(p, area, buf);
         })
         .main_content(|_state, area, buf| {
@@ -1069,6 +1109,8 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .footer_color(Color::Yellow)
         .panel_height(3)
         .sidebar_width_fraction(0.2)
+        .left_sidebar_min_width(line_width(left_text))
+        .right_sidebar_min_width(line_width(right_text))
 }
 
 /// Encode panel targets and boost flags into an 8-bit state vector.
