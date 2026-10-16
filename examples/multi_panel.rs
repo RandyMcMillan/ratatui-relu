@@ -33,7 +33,7 @@ struct App {
 }
 
 struct TestMode {
-    permutation: u8,
+    state: u8,
     step: u8,
     timer: Duration,
 }
@@ -42,97 +42,121 @@ struct TestMode {
 const TEST_KEYS: [KeyCode; 4] = [KeyCode::Left, KeyCode::Right, KeyCode::Up, KeyCode::Down];
 
 // State bit indices for matrix operations.
+// Panel bits:
 const BIT_HEADER: u8 = 0;
 const BIT_LEFT: u8 = 1;
 const BIT_RIGHT: u8 = 2;
 const BIT_FOOTER: u8 = 3;
+// Boost bits:
+const BIT_TOP_BOOST: u8 = 4;
+const BIT_BOTTOM_BOOST: u8 = 5;
+const BIT_LEFT_BOOST: u8 = 6;
+const BIT_RIGHT_BOOST: u8 = 7;
 
-/// Encode the four panel targets into a 4-bit state vector.
-fn state_bits(state: &MultiPanelState) -> u8 {
-    let bit = |panel: &ratarelu::animation::Transition, idx: u8| {
+/// Encode panel targets and boost flags into an 8-bit state vector.
+fn state_bits(app: &App) -> u8 {
+    let panel_bit = |panel: &ratarelu::animation::Transition, idx: u8| {
         if panel.target() > 0.5 { 1 << idx } else { 0 }
     };
-    bit(&state.header, BIT_HEADER)
-        | bit(&state.left_sidebar, BIT_LEFT)
-        | bit(&state.right_sidebar, BIT_RIGHT)
-        | bit(&state.footer, BIT_FOOTER)
+    panel_bit(&app.state.header, BIT_HEADER)
+        | panel_bit(&app.state.left_sidebar, BIT_LEFT)
+        | panel_bit(&app.state.right_sidebar, BIT_RIGHT)
+        | panel_bit(&app.state.footer, BIT_FOOTER)
+        | if app.top_boost { 1 << BIT_TOP_BOOST } else { 0 }
+        | if app.bottom_boost { 1 << BIT_BOTTOM_BOOST } else { 0 }
+        | if app.left_boost { 1 << BIT_LEFT_BOOST } else { 0 }
+        | if app.right_boost { 1 << BIT_RIGHT_BOOST } else { 0 }
 }
 
-/// Apply a 4-bit state vector to the panel transitions.
-fn set_state_bits(state: &mut MultiPanelState, bits: u8) {
+/// Apply an 8-bit state vector to the app (panels + boosts).
+fn set_state_bits(app: &mut App, bits: u8) {
     let open = |idx: u8| if (bits >> idx) & 1 == 1 { 1.0 } else { 0.0 };
-    state.header.set_target(open(BIT_HEADER));
-    state.left_sidebar.set_target(open(BIT_LEFT));
-    state.right_sidebar.set_target(open(BIT_RIGHT));
-    state.footer.set_target(open(BIT_FOOTER));
+    app.state.header.set_target(open(BIT_HEADER));
+    app.state.left_sidebar.set_target(open(BIT_LEFT));
+    app.state.right_sidebar.set_target(open(BIT_RIGHT));
+    app.state.footer.set_target(open(BIT_FOOTER));
+    app.top_boost = (bits >> BIT_TOP_BOOST) & 1 == 1;
+    app.bottom_boost = (bits >> BIT_BOTTOM_BOOST) & 1 == 1;
+    app.left_boost = (bits >> BIT_LEFT_BOOST) & 1 == 1;
+    app.right_boost = (bits >> BIT_RIGHT_BOOST) & 1 == 1;
 }
 
-/// Transition matrix for arrow keys.
+/// Transition matrix for arrow keys over the full state space.
 ///
-/// Given a 4-bit panel state vector, returns the next 4-bit state vector that
-/// should result from pressing `key`.
+/// State is an 8-bit vector: lower 4 bits are panel open/closed, upper 4 bits
+/// are boost flags (top, bottom, left, right).
 fn transition_matrix(state: u8, key: KeyCode) -> u8 {
     let h = (state >> BIT_HEADER) & 1;
     let l = (state >> BIT_LEFT) & 1;
     let r = (state >> BIT_RIGHT) & 1;
     let f = (state >> BIT_FOOTER) & 1;
+    let top_b = (state >> BIT_TOP_BOOST) & 1;
+    let bot_b = (state >> BIT_BOTTOM_BOOST) & 1;
+    let left_b = (state >> BIT_LEFT_BOOST) & 1;
+    let right_b = (state >> BIT_RIGHT_BOOST) & 1;
 
-    let (nh, nl, nr, nf) = match key {
+    let (nh, nl, nr, nf, ntop_b, nbot_b, nleft_b, nright_b) = match key {
         KeyCode::Up => {
             if h == 0 && f == 1 {
-                (h, l, r, f) // boost: no panel change
+                (h, l, r, f, top_b, bot_b ^ 1, left_b, right_b) // toggle bottom boost
             } else if h == 0 {
-                (h, l, r, 1) // open footer
+                (h, l, r, 1, top_b, bot_b, left_b, right_b) // open footer
             } else {
-                (0, l, r, f) // close header
+                (0, l, r, f, top_b, bot_b, left_b, right_b) // close header
             }
         }
         KeyCode::Down => {
             if f == 0 && h == 1 {
-                (h, l, r, f) // boost
+                (h, l, r, f, top_b ^ 1, bot_b, left_b, right_b) // toggle top boost
             } else if f == 0 {
-                (1, l, r, f) // open header
+                (1, l, r, f, top_b, bot_b, left_b, right_b) // open header
             } else {
-                (h, l, r, 0) // close footer
+                (h, l, r, 0, top_b, bot_b, left_b, right_b) // close footer
             }
         }
         KeyCode::Right => {
             if r == 0 && l == 1 {
-                (h, l, r, f) // boost
+                (h, l, r, f, top_b, bot_b, left_b ^ 1, right_b) // toggle left boost
             } else if r == 0 {
-                (h, 1, r, f) // open left
+                (h, 1, r, f, top_b, bot_b, left_b, right_b) // open left
             } else {
-                (h, l, 0, f) // close right
+                (h, l, 0, f, top_b, bot_b, left_b, right_b) // close right
             }
         }
         KeyCode::Left => {
             if l == 0 && r == 1 {
-                (h, l, r, f) // boost
+                (h, l, r, f, top_b, bot_b, left_b, right_b ^ 1) // toggle right boost
             } else if l == 0 {
-                (h, l, 1, f) // open right
+                (h, l, 1, f, top_b, bot_b, left_b, right_b) // open right
             } else {
-                (h, 0, r, f) // close left
+                (h, 0, r, f, top_b, bot_b, left_b, right_b) // close left
             }
         }
-        _ => (h, l, r, f),
+        _ => (h, l, r, f, top_b, bot_b, left_b, right_b),
     };
 
-    (nh << BIT_HEADER) | (nl << BIT_LEFT) | (nr << BIT_RIGHT) | (nf << BIT_FOOTER)
+    (nh << BIT_HEADER)
+        | (nl << BIT_LEFT)
+        | (nr << BIT_RIGHT)
+        | (nf << BIT_FOOTER)
+        | (ntop_b << BIT_TOP_BOOST)
+        | (nbot_b << BIT_BOTTOM_BOOST)
+        | (nleft_b << BIT_LEFT_BOOST)
+        | (nright_b << BIT_RIGHT_BOOST)
 }
 
-/// Run the full 16×4 transition matrix and return the first mismatch, if any.
+/// Run the full 256×4 transition matrix and return the first mismatch, if any.
 fn verify_transition_matrix() -> Option<String> {
-    for state in 0..16u8 {
+    for state in 0..=255u8 {
         for key in TEST_KEYS {
-            let mut test_state = MultiPanelState::closed(100.0);
-            set_state_bits(&mut test_state, state);
-            let mut app = App::from_state(test_state);
+            let mut app = App::from_state(MultiPanelState::closed(100.0));
+            set_state_bits(&mut app, state);
             app.simulate_key(key);
             let expected = transition_matrix(state, key);
-            let actual = state_bits(&app.state);
+            let actual = state_bits(&app);
             if actual != expected {
                 return Some(format!(
-                    "state={:04b} key={:?} expected={:04b} actual={:04b}",
+                    "state={:08b} key={:?} expected={:08b} actual={:08b}",
                     state, key, expected, actual
                 ));
             }
@@ -166,20 +190,20 @@ impl App {
         let mut advance: Option<(u8, u8)> = None;
         if let Some(test) = &mut self.test_mode {
             test.timer += dt;
-            if test.timer >= Duration::from_millis(300) {
+            if test.timer >= Duration::from_millis(150) {
                 test.timer = Duration::ZERO;
-                advance = Some((test.permutation, test.step));
+                advance = Some((test.state, test.step));
                 test.step += 1;
                 if test.step >= TEST_KEYS.len() as u8 {
                     test.step = 0;
-                    test.permutation = (test.permutation + 1) % 16;
+                    test.state = test.state.wrapping_add(1);
                 }
             }
         }
-        if let Some((permutation, step)) = advance {
+        if let Some((state, step)) = advance {
             if step == 0 {
-                // Start of a new permutation: reset to the base state.
-                self.apply_permutation(permutation);
+                // Start of a new state: reset to the base state.
+                set_state_bits(self, state);
             }
             // Simulate the key for this step.
             self.simulate_key(TEST_KEYS[step as usize]);
@@ -190,14 +214,14 @@ impl App {
         if let Some(err) = verify_transition_matrix() {
             eprintln!("Transition matrix mismatch: {}", err);
         } else {
-            eprintln!("Transition matrix verified: all 64 state-key cases pass");
+            eprintln!("Transition matrix verified: all 1024 state-key cases pass");
         }
         self.test_mode = Some(TestMode {
-            permutation: 0,
+            state: 0,
             step: 0,
             timer: Duration::ZERO,
         });
-        self.apply_permutation(0);
+        set_state_bits(self, 0);
     }
 
     fn stop_test_mode(&mut self) {
@@ -266,15 +290,6 @@ impl App {
             }
             _ => {}
         }
-    }
-
-    fn apply_permutation(&mut self, permutation: u8) {
-        // bit 0 -> header, 1 -> left, 2 -> right, 3 -> footer
-        let open = |bit: u8| if (permutation >> bit) & 1 == 1 { 1.0 } else { 0.0 };
-        self.state.header.set_target(open(0));
-        self.state.left_sidebar.set_target(open(1));
-        self.state.right_sidebar.set_target(open(2));
-        self.state.footer.set_target(open(3));
     }
 
     fn left_sidebar_fraction(&self) -> f64 {
@@ -346,10 +361,10 @@ fn ui(f: &mut ratatui::Frame, app: &mut App) {
     let header_height = app.header_height();
     let footer_height = app.footer_height();
     let test_label = app.test_mode.as_ref().map(|t| {
-        let bits = state_bits(&app.state);
+        let bits = state_bits(app);
         format!(
-            "TEST MODE perm {}/16 key {}/{} state {:04b}",
-            t.permutation + 1,
+            "TEST MODE state {}/256 key {}/{} bits {:08b}",
+            t.state + 1,
             t.step + 1,
             TEST_KEYS.len(),
             bits
