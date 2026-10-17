@@ -63,6 +63,14 @@ fn run_app(
                     if app.footer_terminal_focus {
                         if key.code == crossterm::event::KeyCode::Esc {
                             app.footer_terminal_focus = false;
+                        } else if key.code == crossterm::event::KeyCode::PageUp {
+                            if let Some(term) = &mut *app.terminal.borrow_mut() {
+                                term.scroll_up(10);
+                            }
+                        } else if key.code == crossterm::event::KeyCode::PageDown {
+                            if let Some(term) = &mut *app.terminal.borrow_mut() {
+                                term.scroll_down(10);
+                            }
                         } else {
                             let bytes = match key.code {
                                 crossterm::event::KeyCode::Char(c) => {
@@ -84,6 +92,14 @@ fn run_app(
                     } else if app.show_terminal {
                         if key.code == crossterm::event::KeyCode::Esc {
                             app.show_terminal = false;
+                        } else if key.code == crossterm::event::KeyCode::PageUp {
+                            if let Some(term) = &mut *app.terminal.borrow_mut() {
+                                term.scroll_up(10);
+                            }
+                        } else if key.code == crossterm::event::KeyCode::PageDown {
+                            if let Some(term) = &mut *app.terminal.borrow_mut() {
+                                term.scroll_down(10);
+                            }
                         } else {
                             // Send keystroke to terminal.
                             let bytes = match key.code {

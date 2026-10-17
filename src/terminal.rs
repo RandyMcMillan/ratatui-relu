@@ -6,6 +6,7 @@ use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
 pub struct TerminalState {
     pub parser: vt100::Parser,
+    pub scrollback: usize,
     pub writer: Box<dyn Write + Send>,
     pub rx: std::sync::mpsc::Receiver<Vec<u8>>,
     _child: Box<dyn portable_pty::Child + Send + Sync>,
@@ -43,9 +44,10 @@ impl TerminalState {
                 }
             }
         });
-        let parser = vt100::Parser::new(24, 80, 0);
+        let parser = vt100::Parser::new(24, 80, 1000);
         Some(Self {
             parser,
+            scrollback: 0,
             writer,
             rx,
             _child: child,
@@ -54,14 +56,30 @@ impl TerminalState {
     }
 
     pub fn poll(&mut self) {
+        let mut got = false;
         while let Ok(bytes) = self.rx.try_recv() {
             self.parser.process(&bytes);
+            got = true;
+        }
+        if got && self.scrollback != 0 {
+            self.scrollback = 0;
+            self.parser.screen_mut().set_scrollback(0);
         }
     }
 
     pub fn write_input(&mut self, data: &[u8]) {
         let _ = self.writer.write_all(data);
         let _ = self.writer.flush();
+    }
+
+    pub fn scroll_up(&mut self, lines: usize) {
+        self.scrollback = self.scrollback.saturating_add(lines);
+        self.parser.screen_mut().set_scrollback(self.scrollback);
+    }
+
+    pub fn scroll_down(&mut self, lines: usize) {
+        self.scrollback = self.scrollback.saturating_sub(lines);
+        self.parser.screen_mut().set_scrollback(self.scrollback);
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) {
@@ -71,6 +89,6 @@ impl TerminalState {
             pixel_width: 0,
             pixel_height: 0,
         });
-        self.parser = vt100::Parser::new(rows, cols, 0);
+        self.parser = vt100::Parser::new(rows, cols, 1000);
     }
 }
