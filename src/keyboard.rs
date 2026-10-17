@@ -1,12 +1,8 @@
 //! Clickable keyboard widget.
 
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    widgets::{StatefulWidget, Widget},
-};
+use ratatui::widgets::StatefulWidget;
 
-use crate::mouse::{Button, ButtonState, is_mouse_over};
+use crate::mouse::{ButtonState, is_mouse_over};
 use crate::multi_panel::MultiPanelApp;
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
@@ -63,7 +59,7 @@ impl KeyboardState {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct KeyboardWidget {
     pub rows: Vec<Vec<char>>,
 }
