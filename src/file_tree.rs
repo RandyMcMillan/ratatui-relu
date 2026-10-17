@@ -3,7 +3,7 @@
 //! Exposes the underlying tree types plus a [`FileTreeWidget`] /
 //! [`FileTreeState`] pair that implements [`ratatui::widgets::StatefulWidget`].
 
-pub use gnostr_filetreelist::*;
+pub use filetreelist::*;
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
@@ -19,7 +19,7 @@ use ratatui::{
 use labtui_asyncgit::sync::status::{StatusItem, StatusItemType};
 
 /// Mutable state for [`FileTreeWidget`].
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct FileTreeState {
     /// Source paths (unsorted input is sorted on rebuild).
     paths: Vec<PathBuf>,
@@ -28,7 +28,7 @@ pub struct FileTreeState {
     /// Git status per path.
     git_status_map: HashMap<PathBuf, StatusItemType>,
     /// Built tree (None when empty).
-    tree: Option<gnostr_filetreelist::FileTree>,
+    tree: Option<filetreelist::FileTree>,
     /// Visual index of the first rendered row.
     scroll: usize,
     /// Last rendered viewport height (rows).
@@ -85,18 +85,21 @@ impl FileTreeState {
     }
 
     /// Access the underlying tree.
-    pub fn tree(&self) -> Option<&gnostr_filetreelist::FileTree> {
+    pub fn tree(&self) -> Option<&filetreelist::FileTree> {
         self.tree.as_ref()
     }
 
     /// Access the underlying tree mutably.
-    pub fn tree_mut(&mut self) -> Option<&mut gnostr_filetreelist::FileTree> {
+    pub fn tree_mut(&mut self) -> Option<&mut filetreelist::FileTree> {
         self.tree.as_mut()
     }
 
     /// Path of the currently selected item.
     pub fn selected_path(&self) -> Option<&Path> {
-        self.tree.as_ref().and_then(gnostr_filetreelist::FileTree::selected_path)
+        self.tree
+            .as_ref()
+            .and_then(filetreelist::FileTree::selected_file)
+            .map(TreeItemInfo::full_path)
     }
 
     /// Current scroll offset (visual index of first rendered row).
@@ -112,7 +115,7 @@ impl FileTreeState {
         }
         let refs: Vec<&Path> = self.paths.iter().map(PathBuf::as_path).collect();
         let collapsed_refs: BTreeSet<&String> = self.collapsed.iter().collect();
-        self.tree = gnostr_filetreelist::FileTree::new(&refs, &collapsed_refs).ok();
+        self.tree = filetreelist::FileTree::new(&refs, &collapsed_refs).ok();
         self.scroll = 0;
     }
 
@@ -126,15 +129,15 @@ impl FileTreeState {
 
         let mut changed = false;
         match code {
-            KeyCode::Up => changed = tree.move_selection(gnostr_filetreelist::MoveSelection::Up),
-            KeyCode::Down => changed = tree.move_selection(gnostr_filetreelist::MoveSelection::Down),
-            KeyCode::Left => changed = tree.move_selection(gnostr_filetreelist::MoveSelection::Left),
-            KeyCode::Right => changed = tree.move_selection(gnostr_filetreelist::MoveSelection::Right),
-            KeyCode::Home => changed = tree.move_selection(gnostr_filetreelist::MoveSelection::Top),
-            KeyCode::End => changed = tree.move_selection(gnostr_filetreelist::MoveSelection::End),
+            KeyCode::Up => changed = tree.move_selection(filetreelist::MoveSelection::Up),
+            KeyCode::Down => changed = tree.move_selection(filetreelist::MoveSelection::Down),
+            KeyCode::Left => changed = tree.move_selection(filetreelist::MoveSelection::Left),
+            KeyCode::Right => changed = tree.move_selection(filetreelist::MoveSelection::Right),
+            KeyCode::Home => changed = tree.move_selection(filetreelist::MoveSelection::Top),
+            KeyCode::End => changed = tree.move_selection(filetreelist::MoveSelection::End),
             KeyCode::PageUp => {
                 for _ in 0..self.viewport_height.max(1) {
-                    if !tree.move_selection(gnostr_filetreelist::MoveSelection::Up) {
+                    if !tree.move_selection(filetreelist::MoveSelection::Up) {
                         break;
                     }
                     changed = true;
@@ -142,7 +145,7 @@ impl FileTreeState {
             }
             KeyCode::PageDown => {
                 for _ in 0..self.viewport_height.max(1) {
-                    if !tree.move_selection(gnostr_filetreelist::MoveSelection::Down) {
+                    if !tree.move_selection(filetreelist::MoveSelection::Down) {
                         break;
                     }
                     changed = true;
@@ -281,7 +284,7 @@ impl StatefulWidget for FileTreeWidget {
         }
 
         let rows: Vec<Row> = tree
-            .iterate(0, tree.len())
+            .iterate(0, usize::MAX)
             .map(|(item, selected)| Row {
                 indent: item.info().indent() as usize,
                 is_dir: item.kind().is_path(),
