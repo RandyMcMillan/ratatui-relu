@@ -1268,6 +1268,27 @@ impl MultiPanelApp {
             return;
         }
 
+        // Data-driven panel toggle keys (symmetrical: 'l' and 'a' both toggle left).
+        const PANEL_TOGGLE_KEYS: &[(char, usize)] = &[
+            ('t', 0),
+            ('l', 1),
+            ('a', 1),
+            ('r', 2),
+            ('f', 3),
+        ];
+        if let KeyCode::Char(c) = code {
+            if let Some((_, panel)) = PANEL_TOGGLE_KEYS.iter().find(|(k, _)| *k == c) {
+                match panel {
+                    0 => self.state.header.toggle_between(0.0, 1.0),
+                    1 => self.state.left_sidebar.toggle_between(0.0, 1.0),
+                    2 => self.state.right_sidebar.toggle_between(0.0, 1.0),
+                    3 => self.state.footer.toggle_between(0.0, 1.0),
+                    _ => {}
+                }
+                return;
+            }
+        }
+
         match code {
             // A = Automated Test Mode
             KeyCode::Char('A') => {
@@ -1279,15 +1300,10 @@ impl MultiPanelApp {
             }
             // G = Grid Mode
             KeyCode::Char('G') => self.show_grid = !self.show_grid,
-            // t = top
-            KeyCode::Char('t') => self.state.header.toggle_between(0.0, 1.0),
             // Color demo
             KeyCode::Char('C') => self.color_demo = !self.color_demo,
             // Chart mode
             KeyCode::Char('M') => self.chart_mode = !self.chart_mode,
-            KeyCode::Char('l') => self.state.left_sidebar.toggle_between(0.0, 1.0),
-            KeyCode::Char('r') => self.state.right_sidebar.toggle_between(0.0, 1.0),
-            KeyCode::Char('f') => self.state.footer.toggle_between(0.0, 1.0),
             KeyCode::Char(' ') => self.state.toggle_all(),
             // File tree navigation in the left panel.
             KeyCode::Char('j') => {
