@@ -516,6 +516,53 @@ fn help_text() -> Text<'static> {
     Text::from(lines)
 }
 
+/// Build a human-readable summary of the app's current state for the help
+/// overlay.
+fn state_help_text(app: &MultiPanelApp) -> String {
+    let bits = state_bits(app);
+    let panel = |bit: u8| if (bits >> bit) & 1 == 1 { "open" } else { "closed" };
+    let boost = |bit: u8| if (bits >> bit) & 1 == 1 { "on" } else { "off" };
+    format!(
+        "State bits: {:08b}\n\
+        Header: {}  Left: {}  Right: {}  Footer: {}\n\
+        Top boost: {}  Bottom boost: {}  Left boost: {}  Right boost: {}",
+        bits,
+        panel(BIT_HEADER),
+        panel(BIT_LEFT),
+        panel(BIT_RIGHT),
+        panel(BIT_FOOTER),
+        boost(BIT_TOP_BOOST),
+        boost(BIT_BOTTOM_BOOST),
+        boost(BIT_LEFT_BOOST),
+        boost(BIT_RIGHT_BOOST),
+    )
+}
+
+/// A small widget that displays the current [`MultiPanelApp`] state.
+#[derive(Debug, Clone)]
+pub struct StateHelp {
+    text: String,
+}
+
+impl StateHelp {
+    /// Create a `StateHelp` widget from the current app state.
+    pub fn new(app: &MultiPanelApp) -> Self {
+        Self {
+            text: state_help_text(app),
+        }
+    }
+}
+
+impl Widget for StateHelp {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
+        let p = Paragraph::new(self.text).alignment(Alignment::Left);
+        Widget::render(p, area, buf);
+    }
+}
+
 // State bit indices for matrix operations.
 // Panel bits:
 const BIT_HEADER: u8 = 0;
@@ -1089,9 +1136,18 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
             let p = Paragraph::new(right_text).alignment(Alignment::Left);
             Widget::render(p, area, buf);
         })
-        .main_content(|_state, area, buf| {
-            let p = Paragraph::new(help_text()).alignment(Alignment::Left);
-            Widget::render(p, area, buf);
+        .main_content({
+            let state_help = StateHelp::new(_app);
+            let state_lines = state_help.text.lines().count() as u16 + 1;
+            move |_state, area, buf| {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Min(0), Constraint::Length(state_lines)])
+                    .split(area);
+                let help = Paragraph::new(help_text()).alignment(Alignment::Left);
+                Widget::render(help, chunks[0], buf);
+                Widget::render(state_help.clone(), chunks[1], buf);
+            }
         })
         .footer_content(|_state, area, buf| {
             let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
