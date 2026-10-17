@@ -21,7 +21,7 @@ use ratatui::{
 };
 
 use crate::animation::{ColorTransition, Transition};
-use crate::mouse::{ButtonState, ButtonTheme, is_mouse_over};
+use crate::mouse::{ButtonState, is_mouse_over};
 
 /// Mutable state for [`MultiPanel`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -739,22 +739,14 @@ impl StatefulWidget for StateHelpTable {
             let cell_area = cols[col];
             state.button_states[cell.index()].last_area = Some(cell_area);
 
-            let bg = if *is_on {
-                ButtonTheme::GREEN.background
-            } else {
-                ButtonTheme::RED.background
-            };
             let border_color = if *is_on { Color::Green } else { Color::Magenta };
             let block = Block::bordered()
                 .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(border_color))
-                .style(Style::default().bg(bg));
+                .border_style(Style::default().fg(border_color));
             let inner = block.inner(cell_area);
             Widget::render(block, cell_area, buf);
             if inner.width > 0 && inner.height > 0 {
-                let p = Paragraph::new(Line::from(label.as_str()))
-                    .alignment(Alignment::Center)
-                    .style(Style::default().bg(bg));
+                let p = Paragraph::new(Line::from(label.as_str())).alignment(Alignment::Center);
                 Widget::render(p, inner, buf);
             }
         }
