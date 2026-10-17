@@ -3,11 +3,11 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use crossbeam_channel::{unbounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use labtui_asyncgit::{
     AsyncDiff, AsyncGitNotification, AsyncStatus, DiffParams, DiffType, FileDiff, StatusParams,
-    sync::diff::DiffOptions,
     sync::RepoPath,
+    sync::diff::DiffOptions,
     sync::status::{StatusItem, StatusItemType, StatusType},
 };
 
@@ -104,4 +104,3 @@ impl GitState {
             .map(|item| item.status)
     }
 }
-
