@@ -23,7 +23,8 @@ use ratatui::{
 use crate::animation::{ColorTransition, Transition};
 use crate::file_tree::{FileTreeState, FileTreeWidget};
 use crate::git::GitState;
-use crate::mouse::{ButtonState, is_mouse_over};/// Mutable state for [`MultiPanel`].
+use crate::mouse::{ButtonState, is_mouse_over};
+/// Mutable state for [`MultiPanel`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MultiPanelState {
     pub header: Transition,
@@ -1189,24 +1190,28 @@ impl MultiPanelApp {
 
             // Right arrow on a selected file loads it and activates the main view.
             if code == KeyCode::Right {
-                let selected = self.file_tree_state.borrow().selected_path().map(|p| p.to_path_buf());
+                let selected = self
+                    .file_tree_state
+                    .borrow()
+                    .selected_path()
+                    .map(|p| p.to_path_buf());
                 if let Some(path) = selected.filter(|p| p.is_file()) {
                     self.selected_file = Some(path.clone());
-                        let content = std::fs::read_to_string(&path)
-                            .unwrap_or_else(|e| format!("Error reading file: {}", e));
-                        self.file_preview = if content.len() > 100_000 {
-                            let mut t = content[..100_000].to_string();
-                            t.push_str("\n... (truncated)");
-                            t
-                        } else {
-                            content
-                        };
-                        self.main_active = true;
-                        self.main_scroll = 0;
-                        if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
-                            git.fetch_diff(&path);
-                        }
-                        return;
+                    let content = std::fs::read_to_string(&path)
+                        .unwrap_or_else(|e| format!("Error reading file: {}", e));
+                    self.file_preview = if content.len() > 100_000 {
+                        let mut t = content[..100_000].to_string();
+                        t.push_str("\n... (truncated)");
+                        t
+                    } else {
+                        content
+                    };
+                    self.main_active = true;
+                    self.main_scroll = 0;
+                    if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
+                        git.fetch_diff(&path);
+                    }
+                    return;
                 }
             }
 
@@ -1281,25 +1286,17 @@ impl MultiPanelApp {
             KeyCode::Char(' ') => self.state.toggle_all(),
             // File tree navigation in the left panel.
             KeyCode::Char('j') => {
-                self.file_tree_state
-                    .borrow_mut()
-                    .handle_key(KeyCode::Down);
+                self.file_tree_state.borrow_mut().handle_key(KeyCode::Down);
             }
             KeyCode::Char('k') => {
-                self.file_tree_state
-                    .borrow_mut()
-                    .handle_key(KeyCode::Up);
+                self.file_tree_state.borrow_mut().handle_key(KeyCode::Up);
             }
             KeyCode::Char('h') => {
-                self.file_tree_state
-                    .borrow_mut()
-                    .handle_key(KeyCode::Left);
+                self.file_tree_state.borrow_mut().handle_key(KeyCode::Left);
             }
             KeyCode::Char('L') => {
-                self.file_tree_state
-                    .borrow_mut()
-                    .handle_key(KeyCode::Right);
-            }            // right handed                 // left handed
+                self.file_tree_state.borrow_mut().handle_key(KeyCode::Right);
+            } // right handed                 // left handed
             KeyCode::Char('\\') | KeyCode::Char('q') => self.show_help = !self.show_help,
             KeyCode::Up => {
                 let top_closed = self.state.header.target() < 0.5;
@@ -1781,7 +1778,12 @@ pub fn transition_matrix(state: u8, key: crossterm::event::KeyCode) -> u8 {
 
     // When the left panel is open, arrow keys drive the file tree and do not
     // change panel/boost state.
-    if l == 1 && matches!(key, KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right) {
+    if l == 1
+        && matches!(
+            key,
+            KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right
+        )
+    {
         return state;
     }
 
