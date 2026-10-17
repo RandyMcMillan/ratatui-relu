@@ -3,11 +3,13 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    widgets::StatefulWidget,
+    style::{Color, Style},
+    text::Line,
+    widgets::{StatefulWidget, Widget},
 };
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-use crate::mouse::{Button, ButtonState, is_mouse_over};
+use crate::mouse::is_mouse_over;
 
 /// Rows of keys in the keyboard graphic.
 const KEY_ROWS: &[&[char]] = &[
@@ -25,11 +27,114 @@ pub enum KeyboardAction {
     Space,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ButtonState {
+    Normal,
+    Selected,
+    Active,
+}
+
+impl Default for ButtonState {
+    fn default() -> Self {
+        Self::Normal
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ButtonTheme {
+    pub text: Color,
+    pub background: Color,
+    pub highlight: Color,
+    pub shadow: Color,
+}
+
+impl ButtonTheme {
+    pub const BLUE: Self = Self {
+        text: Color::Rgb(16, 24, 48),
+        background: Color::Rgb(48, 72, 144),
+        highlight: Color::Rgb(64, 96, 192),
+        shadow: Color::Rgb(32, 48, 96),
+    };
+}
+
+#[derive(Debug, Clone)]
+pub struct Button<'a> {
+    label: Line<'a>,
+    theme: ButtonTheme,
+    state: ButtonState,
+}
+
+impl<'a> Button<'a> {
+    pub fn new<T: Into<Line<'a>>>(label: T) -> Self {
+        Self {
+            label: label.into(),
+            theme: ButtonTheme::BLUE,
+            state: ButtonState::Normal,
+        }
+    }
+
+    pub const fn theme(mut self, theme: ButtonTheme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    pub const fn state(mut self, state: ButtonState) -> Self {
+        self.state = state;
+        self
+    }
+
+    const fn colors(&self) -> (Color, Color, Color, Color) {
+        let theme = self.theme;
+        match self.state {
+            ButtonState::Normal => (theme.background, theme.text, theme.shadow, theme.highlight),
+            ButtonState::Selected => (theme.highlight, theme.text, theme.shadow, theme.highlight),
+            ButtonState::Active => (theme.background, theme.text, theme.highlight, theme.shadow),
+        }
+    }
+}
+
+impl Widget for Button<'_> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let (background, text, shadow, highlight) = self.colors();
+        buf.set_style(area, Style::new().bg(background).fg(text));
+
+        if area.height > 2 {
+            buf.set_string(
+                area.x,
+                area.y,
+                "▔".repeat(area.width as usize),
+                Style::new().fg(highlight).bg(background),
+            );
+        }
+        if area.height > 1 {
+            buf.set_string(
+                area.x,
+                area.y + area.height - 1,
+                "▁".repeat(area.width as usize),
+                Style::new().fg(shadow).bg(background),
+            );
+        }
+        buf.set_line(
+            area.x + (area.width.saturating_sub(self.label.width() as u16)) / 2,
+            area.y + (area.height.saturating_sub(1)) / 2,
+            &self.label,
+            area.width,
+        );
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct KeyboardState {
     pub button_states: Vec<ButtonState>,
+    pub last_areas: Vec<Option<Rect>>,
     pub keys: Vec<char>,
     pub last_output: String,
+}
+
+impl Default for KeyboardState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl KeyboardState {
@@ -40,23 +145,45 @@ impl KeyboardState {
         }
         Self {
             button_states: vec![ButtonState::default(); keys.len()],
+            last_areas: vec![None; keys.len()],
             keys,
             last_output: String::new(),
         }
     }
 
-    /// Handles incoming mouse events, updating button hover/press states 
-    /// and returning an optional action if a key was clicked.
     pub fn handle_mouse(&mut self, event: MouseEvent) -> Option<KeyboardAction> {
         let mut clicked: Option<usize> = None;
 
-        for (i, btn) in self.button_states.iter_mut().enumerate() {
-            btn.handle_mouse(event);
-            if matches!(event.kind, MouseEventKind::Down(MouseButton::Left)) {
-                if let Some(area) = btn.last_area {
-                    if is_mouse_over(area, event.column, event.row) {
-                        clicked = Some(i);
+        for (i, area) in self.last_areas.iter().enumerate() {
+            if let Some(area) = area {
+                if is_mouse_over(*area, event.column, event.row)
+                    && matches!(event.kind, MouseEventKind::Down(MouseButton::Left))
+                {
+                    clicked = Some(i);
+                }
+            }
+        }
+
+        // update hover states
+        for (i, bs) in self.button_states.iter_mut().enumerate() {
+            if let Some(area) = self.last_areas[i] {
+                let over = is_mouse_over(area, event.column, event.row);
+                match event.kind {
+                    MouseEventKind::Moved => {
+                        if over && *bs != ButtonState::Active {
+                            *bs = ButtonState::Selected;
+                        } else if !over && *bs == ButtonState::Selected {
+                            *bs = ButtonState::Normal;
+                        }
                     }
+                    MouseEventKind::Down(MouseButton::Left) if over => {
+                        *bs = if *bs == ButtonState::Active {
+                            ButtonState::Normal
+                        } else {
+                            ButtonState::Active
+                        };
+                    }
+                    _ => {}
                 }
             }
         }
@@ -118,11 +245,12 @@ impl StatefulWidget for KeyboardWidget {
                 let btn_area = Rect::new(x, y, w, h);
 
                 if x + w <= area.x + area.width && y + h <= area.y + area.height {
-                    let button = Button::new(label);
-                    if let Some(bs) = state.button_states.get_mut(idx) {
-                        bs.last_area = Some(btn_area);
-                        button.render(btn_area, buf, bs);
+                    let st = state.button_states.get(idx).copied().unwrap_or(ButtonState::Normal);
+                    let button = Button::new(label).state(st);
+                    if let Some(slot) = state.last_areas.get_mut(idx) {
+                        *slot = Some(btn_area);
                     }
+                    button.render(btn_area, buf);
                 }
                 idx += 1;
                 x += w + 1;
