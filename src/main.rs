@@ -66,7 +66,8 @@ fn run_app(
                             disable_mouse_capture()?;
                             disable_raw_mode()?;
                             terminal.backend_mut().execute(LeaveAlternateScreen)?;
-                            let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+                            let editor =
+                                std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
                             let _ = std::process::Command::new(&editor).arg(&path).status();
                             // Restore the TUI.
                             stdout().execute(EnterAlternateScreen)?;
@@ -78,18 +79,20 @@ fn run_app(
                                 app.file_preview = content;
                             }
                         }
+                    } else if key.code == crossterm::event::KeyCode::Esc && app.show_help {
+                        app.show_help = false;
                     } else if key.code == crossterm::event::KeyCode::Esc && app.main_active {
                         if app.main_boost {
                             app.main_boost = false;
                         } else {
                             app.main_active = false;
-                            app.main_scroll = 0;
+                            // keep view state app.main_scroll = 0;
                         }
                     } else {
                         app.handle_key_event(key);
                         if matches!(
                             key.code,
-                            crossterm::event::KeyCode::Char('q') | crossterm::event::KeyCode::Esc
+                            crossterm::event::KeyCode::Char('q') // TODO Esc not exit app | crossterm::event::KeyCode::Esc
                         ) {
                             break;
                         }
