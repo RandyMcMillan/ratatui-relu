@@ -54,7 +54,7 @@ jobs:
           shared-key: "ratatui-relu"
 
       - name: Build
-        run: cargo build --verbose ${{ inputs.features && format('--features {0}', inputs.features) || '' }}
+        run: cargo build --offline --verbose ${{ inputs.features && format('--features {0}', inputs.features) || '' }}
 
       - name: Test
-        run: cargo test --verbose ${{ inputs.features && format('--features {0}', inputs.features) || '' }}
+        run: cargo test --offline --verbose ${{ inputs.features && format('--features {0}', inputs.features) || '' }}
