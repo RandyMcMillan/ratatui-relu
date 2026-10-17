@@ -4,7 +4,7 @@ version = "0.8.0"
 edition = "2024"
 
 [dependencies]
-clap = { version = "4.6.7", features = ["derive", "env", "string", "unicode"] }
+clap = { version = "4.5", features = ["derive", "env", "string", "unicode"] }
 crossbeam-channel = "0.5"
 crossterm = "0.29"
 dirs = "5.0"
