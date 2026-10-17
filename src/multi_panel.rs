@@ -1173,8 +1173,9 @@ impl MultiPanelApp {
                     KeyCode::Left => {
                         if self.main_boost {
                             self.main_boost = false;
+                            // TODO handle scrolling differently self.main_scroll = self.main_scroll.saturating_sub(20);
                         } else {
-                            self.main_scroll = self.main_scroll.saturating_sub(20);
+                            // TODO handle scrolling differently self.main_scroll = self.main_scroll.saturating_sub(20);
                         }
                     }
                     KeyCode::Right => {
@@ -1450,8 +1451,10 @@ fn default_file_tree_paths() -> Vec<std::path::PathBuf> {
             if name == "target" || name == ".git" || name == "node_modules" {
                 continue;
             }
-            if p.is_dir() {
-                out.push(p.clone());
+            if p.is_symlink() {
+                // Do not follow symlinks to avoid loops; list them as leaves.
+                out.push(p);
+            } else if p.is_dir() {
                 walk(&p, depth - 1, out);
             } else {
                 out.push(p);
