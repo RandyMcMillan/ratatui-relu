@@ -1340,7 +1340,7 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
             move |_state, area, buf| {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)])
+                    .constraints([Constraint::Min(0), Constraint::Length(13)])
                     .split(area);
                 let help = Paragraph::new(help_text()).alignment(Alignment::Left);
                 Widget::render(help, chunks[0], buf);
