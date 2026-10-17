@@ -256,11 +256,11 @@ impl StatefulWidget for KeyboardWidget {
 
         for row in &self.rows {
             let indent = match row.len() {
-                13 => 0u16,
-                12 => 1u16,
-                11 => 2u16,
-                10 => 3u16,
-                1 => 18u16,
+                14 => 0u16,
+                13 => 2u16,
+                12 => 4u16,
+                11 => 6u16,
+                7 => 18u16,
                 _ => 0u16,
             };
             let mut x = area.x + indent;
