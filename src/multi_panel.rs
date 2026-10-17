@@ -1047,8 +1047,8 @@ impl MultiPanelApp {
     pub fn from_state_with_config(state: MultiPanelState, config: MultiPanelAppConfig) -> Self {
         Self {
             state,
-            left_boost: true,
-            right_boost: true,
+            left_boost: false,
+            right_boost: false,
             top_boost: true,
             bottom_boost: true,
             show_grid: true,
@@ -1785,6 +1785,39 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
             let p = Paragraph::new(right_text).alignment(Alignment::Left);
             Widget::render(p, area, buf);
         })
+        .main_content({
+            let table = StateHelpTable::new(_app);
+            let table_state = _app.state_help_table_state.clone();
+            move |_state, area, buf| {
+                let rows = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)])
+                    .split(area);
+
+                let shortcuts_block = Block::bordered()
+                    .title("Shortcuts")
+                    .title_alignment(Alignment::Left);
+                let shortcuts_inner = shortcuts_block.inner(rows[0]);
+                Widget::render(shortcuts_block, rows[0], buf);
+                Widget::render(
+                    Paragraph::new(help_text()).alignment(Alignment::Left),
+                    shortcuts_inner,
+                    buf,
+                );
+
+                let toggles_block = Block::bordered()
+                    .title("Toggles")
+                    .title_alignment(Alignment::Left);
+                let toggles_inner = toggles_block.inner(rows[1]);
+                Widget::render(toggles_block, rows[1], buf);
+                StatefulWidget::render(
+                    table.clone(),
+                    toggles_inner,
+                    buf,
+                    &mut table_state.borrow_mut(),
+                );
+            }
+        })
         .footer_content(|_state, area, buf| {
             let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
             Widget::render(p, area, buf);
@@ -1795,7 +1828,7 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .main_color(Color::Reset)
         .footer_color(Color::Yellow)
         .panel_height(3)
-        .sidebar_width_fraction(0.5)
+        .sidebar_width_fraction(0.25)
         .left_sidebar_min_width(line_width(left_text))
         .right_sidebar_min_width(line_width(right_text))
 }
@@ -1833,40 +1866,9 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
             let p = Paragraph::new(right_text).alignment(Alignment::Left);
             Widget::render(p, area, buf);
         })
-        .main_content({
-            let table = StateHelpTable::new(_app);
-            let table_state = _app.state_help_table_state.clone();
-            move |_state, area, buf| {
-                let rows = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)])
-                    .split(area);
-
-                // Shortcuts row.
-                let shortcuts_block = Block::bordered()
-                    .title("Shortcuts")
-                    .title_alignment(Alignment::Left);
-                let shortcuts_inner = shortcuts_block.inner(rows[0]);
-                Widget::render(shortcuts_block, rows[0], buf);
-                Widget::render(
-                    Paragraph::new(help_text()).alignment(Alignment::Left),
-                    shortcuts_inner,
-                    buf,
-                );
-
-                // Toggles row.
-                let toggles_block = Block::bordered()
-                    .title("Toggles")
-                    .title_alignment(Alignment::Left);
-                let toggles_inner = toggles_block.inner(rows[1]);
-                Widget::render(toggles_block, rows[1], buf);
-                StatefulWidget::render(
-                    table.clone(),
-                    toggles_inner,
-                    buf,
-                    &mut table_state.borrow_mut(),
-                );
-            }
+        .main_content(|_state, area, buf| {
+            let p = Paragraph::new("Help overlay").alignment(Alignment::Center);
+            Widget::render(p, area, buf);
         })
         .footer_content(|_state, area, buf| {
             let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
