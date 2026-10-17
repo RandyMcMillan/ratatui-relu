@@ -575,10 +575,11 @@ enum StateCell {
     BottomBoost,
     LeftBoost,
     RightBoost,
+    Grid,
 }
 
 impl StateCell {
-    const ALL: [StateCell; 8] = [
+    const ALL: [StateCell; 9] = [
         StateCell::Header,
         StateCell::TopBoost,
         StateCell::Left,
@@ -587,6 +588,7 @@ impl StateCell {
         StateCell::LeftBoost,
         StateCell::Footer,
         StateCell::RightBoost,
+        StateCell::Grid,
     ];
 
     fn index(self) -> usize {
@@ -599,6 +601,7 @@ impl StateCell {
             StateCell::LeftBoost => 5,
             StateCell::Footer => 6,
             StateCell::RightBoost => 7,
+            StateCell::Grid => 8,
         }
     }
 
@@ -616,6 +619,7 @@ impl StateCell {
             StateCell::BottomBoost => ("Bottom boost", if app.bottom_boost { "on" } else { "off" }),
             StateCell::LeftBoost => ("Left boost", if app.left_boost { "on" } else { "off" }),
             StateCell::RightBoost => ("Right boost", if app.right_boost { "on" } else { "off" }),
+            StateCell::Grid => ("Grid", if app.show_grid { "on" } else { "off" }),
         };
         format!("{}: {}", name, value)
     }
@@ -630,6 +634,7 @@ impl StateCell {
             StateCell::BottomBoost => app.bottom_boost,
             StateCell::LeftBoost => app.left_boost,
             StateCell::RightBoost => app.right_boost,
+            StateCell::Grid => app.show_grid,
         }
     }
 
@@ -643,6 +648,7 @@ impl StateCell {
             StateCell::BottomBoost => app.bottom_boost = !app.bottom_boost,
             StateCell::LeftBoost => app.left_boost = !app.left_boost,
             StateCell::RightBoost => app.right_boost = !app.right_boost,
+            StateCell::Grid => app.show_grid = !app.show_grid,
         }
     }
 }
@@ -651,7 +657,7 @@ impl StateCell {
 /// feedback.
 #[derive(Debug, Default, Clone)]
 pub struct StateHelpTableState {
-    button_states: [ButtonState; 8],
+    button_states: [ButtonState; 9],
 }
 
 impl StateHelpTableState {
@@ -688,7 +694,7 @@ impl StateHelpTableState {
 #[derive(Debug, Clone)]
 pub struct StateHelpTable {
     bits: u8,
-    cells: [(StateCell, String, bool); 8],
+    cells: [(StateCell, String, bool); 9],
 }
 
 impl StateHelpTable {
@@ -752,20 +758,22 @@ impl StatefulWidget for StateHelpTable {
         render_cell(0, top_cols[0]); // Header
         render_cell(1, top_cols[1]); // Top boost
 
-        // Middle row: left and right options combined.
+        // Middle row: left and right options combined, with Grid in the center.
         let mid_cols = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(25),
-                Constraint::Percentage(25),
-                Constraint::Percentage(25),
-                Constraint::Percentage(25),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
             ])
             .split(rows[1]);
         render_cell(2, mid_cols[0]); // Left
         render_cell(5, mid_cols[1]); // Left boost
-        render_cell(7, mid_cols[2]); // Right boost
-        render_cell(4, mid_cols[3]); // Right
+        render_cell(8, mid_cols[2]); // Grid
+        render_cell(7, mid_cols[3]); // Right boost
+        render_cell(4, mid_cols[4]); // Right
 
         // Bottom row: footer + bottom boost.
         let bot_cols = Layout::default()
