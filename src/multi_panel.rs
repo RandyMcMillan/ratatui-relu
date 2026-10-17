@@ -23,6 +23,7 @@ use ratatui::{
 use crate::animation::{ColorTransition, Transition};
 use crate::file_tree::{FileTreeState, FileTreeWidget};
 use crate::git::GitState;
+use crate::keyboard::{KeyboardState, KeyboardWidget};
 use crate::mouse::{ButtonState, is_mouse_over};
 /// Mutable state for [`MultiPanel`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -944,6 +945,9 @@ pub struct MultiPanelApp {
     /// Interactive state help table state.
     #[serde(skip)]
     pub state_help_table_state: Rc<RefCell<StateHelpTableState>>,
+    /// Keyboard widget state.
+    #[serde(skip)]
+    pub keyboard_state: Rc<RefCell<KeyboardState>>,
 }
 
 impl std::fmt::Debug for MultiPanelApp {
@@ -959,6 +963,7 @@ impl std::fmt::Debug for MultiPanelApp {
             .field("show_settings", &self.show_settings)
             .field("file_tree_state", &"<FileTreeState>")
             .field("file_tree_data", &"<FileTreeState>")
+            .field("keyboard_state", &"<KeyboardState>")
             .field("git", &self.git.is_some())
             .field("selected_file", &self.selected_file)
             .field("file_preview", &self.file_preview)
@@ -1074,6 +1079,7 @@ impl MultiPanelApp {
             test_mode: None,
             config,
             state_help_table_state: Rc::new(RefCell::new(StateHelpTableState::default())),
+            keyboard_state: Rc::new(RefCell::new(KeyboardState::new())),
         }
     }
 
