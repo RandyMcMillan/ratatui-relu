@@ -23,9 +23,8 @@ use ratatui::{
 use crate::animation::{ColorTransition, Transition};
 use crate::file_tree::{FileTreeState, FileTreeWidget};
 use crate::git::GitState;
-use crate::keyboard::{KeyboardState, KeyboardWidget};
-use crate::mouse::{ButtonState, is_mouse_over};
-/// Mutable state for [`MultiPanel`].
+use crate::keyboard::{KeyboardAction, KeyboardState, KeyboardWidget};
+use crate::mouse::{ButtonState, is_mouse_over};/// Mutable state for [`MultiPanel`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MultiPanelState {
     pub header: Transition,
@@ -1478,6 +1477,13 @@ impl MultiPanelApp {
         if self.show_help {
             let state = self.state_help_table_state.clone();
             state.borrow_mut().handle_mouse(event, self);
+            let kb = self.keyboard_state.clone();
+            if let Some(action) = kb.borrow_mut().handle_mouse(event) {
+                match action {
+                    KeyboardAction::Char(c) => self.handle_key(KeyCode::Char(c)),
+                    KeyboardAction::Space => self.handle_key(KeyCode::Char(' ')),
+                }
+            }
         }
     }
 
@@ -1872,36 +1878,14 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
             let p = Paragraph::new(right_text).alignment(Alignment::Left);
             Widget::render(p, area, buf);
         })
-        .main_content(|_state, area, buf| {
-            let highlight = |k: &str| -> Style {
-                match k {
-                    "Q" | "P" | "L" | "A" | "R" | "U" | "F" | "H" | "T" | "N" | "E" | " " => {
-                        Style::default().fg(Color::Yellow).bold()
-                    }
-                    _ => Style::default(),
-                }
-            };
-            let key_row = |indent: &str, keys: &[&str]| -> Line<'static> {
-                let mut spans = vec![Span::raw(indent.to_string())];
-                for k in keys {
-                    spans.push(Span::styled(format!("[{:^3}] ", k), highlight(k)));
-                }
-                Line::from(spans)
-            };
-            let mut lines = vec![
-                Line::from("Keyboard layout (highlighted = bound keys)"),
-                Line::default(),
-                key_row("    ", &["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="]),
-                key_row("      ", &["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "[", "]"]),
-                key_row("        ", &["A", "S", "D", "F", "G", "H", "J", "K", "L", ";", "'"]),
-                key_row("          ", &["Z", "X", "C", "V", "B", "N", "M", ",", ".", "/"]),
-                key_row("              ", &["Space"]),
-            ];
-            lines.push(Line::default());
-            lines.push(Line::from("Q/P/L/A toggle left  R/U toggle right  F/H toggle footer  T header"));
-            lines.push(Line::from("N line numbers  E editor  Space all  Esc de-boost/close  Shift+Q/P quit"));
-            let p = Paragraph::new(Text::from(lines)).alignment(Alignment::Left);
-            Widget::render(p, area, buf);
+        .main_content({
+            let keyboard_state = _app.keyboard_state.clone();
+            move |_state, area, buf| {
+                use ratatui::widgets::StatefulWidget;
+                let widget = KeyboardWidget::default();
+                let mut st = keyboard_state.borrow_mut();
+                StatefulWidget::render(widget, area, buf, &mut st);
+            }
         })
         .footer_content(|_state, area, buf| {
             let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
