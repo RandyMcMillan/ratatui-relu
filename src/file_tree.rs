@@ -5,7 +5,7 @@
 
 pub use gnostr_filetreelist::*;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use ratatui::{
@@ -16,7 +16,8 @@ use ratatui::{
     widgets::{Block, StatefulWidget, Widget},
 };
 
-// (types referenced via gnostr_filetreelist::)
+use labtui_asyncgit::sync::status::{StatusItem, StatusItemType};
+
 /// Mutable state for [`FileTreeWidget`].
 #[derive(Debug, Clone, Default)]
 pub struct FileTreeState {
@@ -24,6 +25,8 @@ pub struct FileTreeState {
     paths: Vec<PathBuf>,
     /// Set of collapsed folder paths (as strings).
     collapsed: BTreeSet<String>,
+    /// Git status per path.
+    git_status_map: HashMap<PathBuf, StatusItemType>,
     /// Built tree (None when empty).
     tree: Option<gnostr_filetreelist::FileTree>,
     /// Visual index of the first rendered row.
@@ -56,6 +59,19 @@ impl FileTreeState {
     pub fn set_collapsed(&mut self, collapsed: BTreeSet<String>) {
         self.collapsed = collapsed;
         self.rebuild();
+    }
+
+    /// Replace the git status map.
+    pub fn set_git_status(&mut self, items: Vec<StatusItem>) {
+        self.git_status_map.clear();
+        for item in items {
+            self.git_status_map.insert(PathBuf::from(item.path), item.status);
+        }
+    }
+
+    /// Look up git status for a path.
+    pub fn git_status(&self, path: &Path) -> Option<StatusItemType> {
+        self.git_status_map.get(path).copied()
     }
 
     /// Current source paths.
@@ -260,6 +276,7 @@ impl StatefulWidget for FileTreeWidget {
             is_dir: bool,
             collapsed: bool,
             name: String,
+            full_path: String,
             selected: bool,
         }
 
@@ -270,6 +287,7 @@ impl StatefulWidget for FileTreeWidget {
                 is_dir: item.kind().is_path(),
                 collapsed: item.kind().is_path_collapsed(),
                 name: item.info().path_str().to_string(),
+                full_path: item.info().full_path_str().to_string(),
                 selected,
             })
             .collect();
@@ -310,12 +328,25 @@ impl StatefulWidget for FileTreeWidget {
             let indent_str = " ".repeat(row.indent * self.indent_width as usize);
             let line_text = format!("{}{} {}", indent_str, icon, row.name);
 
-            let style = if row.selected {
+            let base_style = if row.selected {
                 self.selected_style
             } else if row.is_dir {
                 self.dir_style
             } else {
                 self.normal_style
+            };
+            let style = if row.selected {
+                base_style
+            } else {
+                match state.git_status_map.get(&PathBuf::from(&row.full_path)) {
+                    Some(StatusItemType::New) => base_style.fg(Color::Green),
+                    Some(StatusItemType::Modified) => base_style.fg(Color::Yellow),
+                    Some(StatusItemType::Deleted) => base_style.fg(Color::Red),
+                    Some(StatusItemType::Renamed) => base_style.fg(Color::Cyan),
+                    Some(StatusItemType::Conflicted) => base_style.fg(Color::Magenta),
+                    Some(StatusItemType::Typechange) => base_style.fg(Color::Blue),
+                    None => base_style,
+                }
             };
 
             // clear row

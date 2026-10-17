@@ -22,8 +22,8 @@ use ratatui::{
 
 use crate::animation::{ColorTransition, Transition};
 use crate::file_tree::{FileTreeState, FileTreeWidget};
-use crate::mouse::{ButtonState, is_mouse_over};
-/// Mutable state for [`MultiPanel`].
+use crate::git::GitState;
+use crate::mouse::{ButtonState, is_mouse_over};/// Mutable state for [`MultiPanel`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MultiPanelState {
     pub header: Transition,
@@ -878,6 +878,9 @@ pub struct MultiPanelApp {
     /// Shared state for the file tree rendered in the left panel.
     #[serde(skip)]
     pub file_tree_state: Rc<RefCell<FileTreeState>>,
+    /// Async git state (if inside a git repo).
+    #[serde(skip)]
+    pub git: Option<GitState>,
     /// Currently selected file path (loaded on Enter).
     #[serde(skip)]
     pub selected_file: Option<std::path::PathBuf>,
@@ -925,6 +928,7 @@ impl std::fmt::Debug for MultiPanelApp {
             .field("test_mode", &self.test_mode)
             .field("config", &"<MultiPanelAppConfig>")
             .field("file_tree_state", &"<FileTreeState>")
+            .field("git", &self.git.is_some())
             .field("selected_file", &self.selected_file)
             .field("file_preview", &self.file_preview)
             .field("main_active", &self.main_active)
@@ -978,6 +982,9 @@ impl MultiPanelApp {
                     .borrow_mut()
                     .set_paths(default_file_tree_paths());
             }
+            if app.git.is_none() {
+                app.git = GitState::new();
+            }
             app.config = config;
             return app;
         }
@@ -1001,6 +1008,7 @@ impl MultiPanelApp {
             file_tree_state: Rc::new(RefCell::new(FileTreeState::from_paths(
                 default_file_tree_paths(),
             ))),
+            git: GitState::new(),
             selected_file: None,
             file_preview: String::new(),
             main_active: false,
@@ -1053,6 +1061,12 @@ impl MultiPanelApp {
     /// Advance animations, automated test mode, color demo, and charts.
     pub fn update(&mut self, dt: Duration) {
         self.state.update(dt);
+
+        if let Some(git) = &mut self.git {
+            git.poll();
+            let items = git.status_items.clone();
+            self.file_tree_state.borrow_mut().set_git_status(items);
+        }
 
         if self.chart_mode {
             self.chart_time += dt.as_secs_f64();
@@ -1178,6 +1192,9 @@ impl MultiPanelApp {
                         };
                         self.main_active = true;
                         self.main_scroll = 0;
+                        if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
+                            git.fetch_diff(&path);
+                        }
                         return;
                 }
             }
@@ -1197,6 +1214,9 @@ impl MultiPanelApp {
                     };
                     self.main_active = true;
                     self.main_scroll = 0;
+                    if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
+                        git.fetch_diff(&path);
+                    }
                 }
                 return;
             }
@@ -1220,6 +1240,9 @@ impl MultiPanelApp {
                 } else {
                     content
                 };
+                if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
+                    git.fetch_diff(&path);
+                }
             }
             return;
         }
@@ -1454,7 +1477,27 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     let file_preview = app.file_preview.clone();
     let selected_file = app.selected_file.clone();
     let main_active = app.main_active;
-    let main_scroll = app.main_scroll;    let color_demo_color = app.color_demo_transition.as_ref().map(|ct| ct.current());
+    let main_scroll = app.main_scroll;
+    let git_diff_text = app
+        .git
+        .as_ref()
+        .and_then(|g| g.diff.as_ref())
+        .filter(|(params, _)| {
+            selected_file
+                .as_ref()
+                .map(|p| params.path == p.to_string_lossy())
+                .unwrap_or(false)
+        })
+        .map(|(_, diff)| {
+            let mut out = String::new();
+            for hunk in &diff.hunks {
+                for line in &hunk.lines {
+                    out.push_str(&line.content);
+                    out.push('\n');
+                }
+            }
+            out
+        });    let color_demo_color = app.color_demo_transition.as_ref().map(|ct| ct.current());
     let test_bits = app.test_mode.as_ref().map(|_| state_bits(app));
     let test_label = app.test_mode.as_ref().map(|t| {
         format!(
@@ -1494,7 +1537,27 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             use crate::chart::ChartDemo;
             use crate::report_grid::NeighborReportGrid;
             use ratatui::widgets::Clear;
-            if !file_preview.is_empty() {
+            if let Some(diff_text) = &git_diff_text {
+                let title = selected_file
+                    .as_ref()
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("diff");
+                let title = if main_active {
+                    format!("{} (diff) [active]", title)
+                } else {
+                    format!("{} (diff)", title)
+                };
+                let block = ratatui::widgets::Block::bordered().title(title);
+                let inner = block.inner(area);
+                ratatui::widgets::Widget::render(block, area, buf);
+                if inner.width > 0 && inner.height > 0 {
+                    let p = ratatui::widgets::Paragraph::new(diff_text.clone())
+                        .wrap(ratatui::widgets::Wrap { trim: false })
+                        .scroll((main_scroll as u16, 0));
+                    ratatui::widgets::Widget::render(p, inner, buf);
+                }
+            } else if !file_preview.is_empty() {
                 let title = selected_file
                     .as_ref()
                     .and_then(|p| p.file_name())
