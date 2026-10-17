@@ -1378,7 +1378,7 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .header_title("Help")
         .left_title("About")
         .right_title("Tips")
-        .main_title("Shortcuts")
+        .main_title("Main")
         .footer_title("Press \\ to close")
         .header_content(|_state, area, buf| {
             let p = Paragraph::new("ratatui-relu help overlay")
@@ -1402,11 +1402,28 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
                     .direction(Direction::Vertical)
                     .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)])
                     .split(area);
-                let help = Paragraph::new(help_text()).alignment(Alignment::Left);
-                Widget::render(help, chunks[0], buf);
+
+                // Shortcuts row.
+                let shortcuts_block = Block::bordered()
+                    .title("Shortcuts")
+                    .title_alignment(Alignment::Left);
+                let shortcuts_inner = shortcuts_block.inner(rows[0]);
+                Widget::render(shortcuts_block, rows[0], buf);
+                Widget::render(
+                    Paragraph::new(help_text()).alignment(Alignment::Left),
+                    shortcuts_inner,
+                    buf,
+                );
+
+                // Toggles row.
+                let toggles_block = Block::bordered()
+                    .title("Toggles")
+                    .title_alignment(Alignment::Left);
+                let toggles_inner = toggles_block.inner(rows[1]);
+                Widget::render(toggles_block, rows[1], buf);
                 StatefulWidget::render(
                     table.clone(),
-                    toggle_chunks[1],
+                    toggles_inner,
                     buf,
                     &mut table_state.borrow_mut(),
                 );
