@@ -99,7 +99,10 @@ fn run_app(
                         break;
                     } else {
                         app.handle_key_event(key);
-                        if matches!(key.code, crossterm::event::KeyCode::Esc) {
+                        if matches!(key.code, crossterm::event::KeyCode::Esc)
+                            && !app.show_help
+                            && !app.show_settings
+                        {
                             break;
                         }
                     }
