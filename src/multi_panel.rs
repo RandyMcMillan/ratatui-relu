@@ -1481,8 +1481,25 @@ impl MultiPanelApp {
             let state = self.state_help_table_state.clone();
             state.borrow_mut().handle_mouse(event, self);
             let kb = self.keyboard_state.clone();
-            // Update keyboard visual state and last_output only.
-            let _ = kb.borrow_mut().handle_mouse(event);
+            if let Some(action) = kb.borrow_mut().handle_mouse(event) {
+                use crate::keyboard::KeyboardAction;
+                match action {
+                    KeyboardAction::Char(c) => self.handle_key(KeyCode::Char(c)),
+                    KeyboardAction::Space => self.handle_key(KeyCode::Char(' ')),
+                    KeyboardAction::Backspace => self.handle_key(KeyCode::Backspace),
+                    KeyboardAction::Tab => self.handle_key(KeyCode::Tab),
+                    KeyboardAction::Enter => self.handle_key(KeyCode::Enter),
+                    KeyboardAction::Esc => {
+                        self.show_help = false;
+                        self.show_settings = false;
+                    }
+                    KeyboardAction::Left => self.handle_key(KeyCode::Left),
+                    KeyboardAction::Down => self.handle_key(KeyCode::Down),
+                    KeyboardAction::Right => self.handle_key(KeyCode::Right),
+                    KeyboardAction::Up => self.handle_key(KeyCode::Up),
+                    _ => {}
+                }
+            }
         }
     }
 

@@ -13,18 +13,31 @@ use crate::mouse::is_mouse_over;
 
 /// Rows of keys in the keyboard graphic.
 const KEY_ROWS: &[&[char]] = &[
-    &['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='],
-    &['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']', '\\'],
-    &['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', '\''],
-    &['Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/'],
-    &[' '],
+    &['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\x08'],
+    &['\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']', '\\'],
+    &['\x14', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', '\'', '\n'],
+    &['\x1e', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/', '\x1f'],
+    &['\x11', ' ', '\x12', '\x1b', '\x1c', '\x1d', '\x1a'],
 ];
+// sentinels: \x08 Backspace, \t Tab, \x14 Caps, \n Enter, \x1e Shift, \x11 Ctrl, \x12 Alt, \x1b Esc, \x1c Left, \x1d Down, \x1a Right, \x1f Shift (right)
 
 /// Actions produced by the keyboard widget interaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyboardAction {
     Char(char),
     Space,
+    Backspace,
+    Tab,
+    Enter,
+    Caps,
+    Shift,
+    Ctrl,
+    Alt,
+    Esc,
+    Left,
+    Down,
+    Right,
+    Up,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -182,16 +195,38 @@ impl KeyboardState {
 
         if let Some(i) = clicked {
             if let Some(&key) = self.keys.get(i) {
-                self.last_output = if key == ' ' {
-                    "Clicked: [Space]".to_string()
-                } else {
-                    format!("Clicked: {}", key)
+                let action = match key {
+                    ' ' => KeyboardAction::Space,
+                    '\x08' => KeyboardAction::Backspace,
+                    '\t' => KeyboardAction::Tab,
+                    '\n' => KeyboardAction::Enter,
+                    '\x14' => KeyboardAction::Caps,
+                    '\x1e' | '\x1f' => KeyboardAction::Shift,
+                    '\x11' => KeyboardAction::Ctrl,
+                    '\x12' => KeyboardAction::Alt,
+                    '\x1b' => KeyboardAction::Esc,
+                    '\x1c' => KeyboardAction::Left,
+                    '\x1d' => KeyboardAction::Down,
+                    '\x1a' => KeyboardAction::Right,
+                    _ => KeyboardAction::Char(key),
                 };
-                return if key == ' ' {
-                    Some(KeyboardAction::Space)
-                } else {
-                    Some(KeyboardAction::Char(key))
+                let label = match key {
+                    ' ' => "Space".to_string(),
+                    '\x08' => "Backspace".to_string(),
+                    '\t' => "Tab".to_string(),
+                    '\n' => "Enter".to_string(),
+                    '\x14' => "Caps".to_string(),
+                    '\x1e' | '\x1f' => "Shift".to_string(),
+                    '\x11' => "Ctrl".to_string(),
+                    '\x12' => "Alt".to_string(),
+                    '\x1b' => "Esc".to_string(),
+                    '\x1c' => "Left".to_string(),
+                    '\x1d' => "Down".to_string(),
+                    '\x1a' => "Right".to_string(),
+                    _ => key.to_string(),
                 };
+                self.last_output = format!("Clicked: {}", label);
+                return Some(action);
             }
         }
 
@@ -231,7 +266,21 @@ impl StatefulWidget for KeyboardWidget {
             let mut x = area.x + indent;
 
             for key in row {
-                let label = if *key == ' ' { "Space".to_string() } else { key.to_string() };
+                let label = match *key {
+                    ' ' => "Space".to_string(),
+                    '\x08' => "Bksp".to_string(),
+                    '\t' => "Tab".to_string(),
+                    '\n' => "Enter".to_string(),
+                    '\x14' => "Caps".to_string(),
+                    '\x1e' | '\x1f' => "Shift".to_string(),
+                    '\x11' => "Ctrl".to_string(),
+                    '\x12' => "Alt".to_string(),
+                    '\x1b' => "Esc".to_string(),
+                    '\x1c' => "←".to_string(),
+                    '\x1d' => "↓".to_string(),
+                    '\x1a' => "→".to_string(),
+                    _ => key.to_string(),
+                };
                 let w: u16 = 5;
                 let h: u16 = 3;
                 let btn_area = Rect::new(x, y, w, h);
