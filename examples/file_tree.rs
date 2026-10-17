@@ -11,8 +11,13 @@ use crossterm::{
     event::{self, Event, KeyEventKind},
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{Terminal, backend::CrosstermBackend, layout::{Constraint, Direction, Layout}, widgets::Block};
 use ratatui::style::Color;
+use ratatui::{
+    Terminal,
+    backend::CrosstermBackend,
+    layout::{Constraint, Direction, Layout},
+    widgets::Block,
+};
 
 use ratatui_relu::file_tree::{FileTreeState, FileTreeWidget};
 use ratatui_relu::mouse::{disable_mouse_capture, enable_mouse_capture};
@@ -61,7 +66,10 @@ fn main() -> io::Result<()> {
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
                     state.handle_key(key.code);
-                    if matches!(key.code, crossterm::event::KeyCode::Char('q') | crossterm::event::KeyCode::Esc) {
+                    if matches!(
+                        key.code,
+                        crossterm::event::KeyCode::Char('q') | crossterm::event::KeyCode::Esc
+                    ) {
                         break;
                     }
                 }
