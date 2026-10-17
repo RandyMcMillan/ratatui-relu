@@ -29,6 +29,7 @@ pub enum KeyboardAction {
 pub struct KeyboardState {
     pub button_states: Vec<ButtonState>,
     pub keys: Vec<char>,
+    pub last_output: String,
 }
 
 impl KeyboardState {
@@ -40,6 +41,7 @@ impl KeyboardState {
         Self {
             button_states: vec![ButtonState::default(); keys.len()],
             keys,
+            last_output: String::new(),
         }
     }
 
@@ -61,6 +63,11 @@ impl KeyboardState {
 
         if let Some(i) = clicked {
             if let Some(&key) = self.keys.get(i) {
+                self.last_output = if key == ' ' {
+                    "Clicked: [Space]".to_string()
+                } else {
+                    format!("Clicked: {}", key)
+                };
                 return if key == ' ' {
                     Some(KeyboardAction::Space)
                 } else {

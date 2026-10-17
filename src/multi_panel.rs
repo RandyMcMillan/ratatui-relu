@@ -23,7 +23,7 @@ use ratatui::{
 use crate::animation::{ColorTransition, Transition};
 use crate::file_tree::{FileTreeState, FileTreeWidget};
 use crate::git::GitState;
-use crate::keyboard::{KeyboardAction, KeyboardState, KeyboardWidget};
+use crate::keyboard::{KeyboardState, KeyboardWidget};
 use crate::mouse::{ButtonState, is_mouse_over};/// Mutable state for [`MultiPanel`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MultiPanelState {
@@ -1036,6 +1036,9 @@ impl MultiPanelApp {
             if app.git.is_none() {
                 app.git = GitState::new();
             }
+            if app.keyboard_state.borrow().keys.is_empty() {
+                *app.keyboard_state.borrow_mut() = crate::keyboard::KeyboardState::new();
+            }
             app.config = config;
             return app;
         }
@@ -1478,12 +1481,8 @@ impl MultiPanelApp {
             let state = self.state_help_table_state.clone();
             state.borrow_mut().handle_mouse(event, self);
             let kb = self.keyboard_state.clone();
-            if let Some(action) = kb.borrow_mut().handle_mouse(event) {
-                match action {
-                    KeyboardAction::Char(c) => self.handle_key(KeyCode::Char(c)),
-                    KeyboardAction::Space => self.handle_key(KeyCode::Char(' ')),
-                }
-            }
+            // Update keyboard visual state and last_output only.
+            let _ = kb.borrow_mut().handle_mouse(event);
         }
     }
 
@@ -1850,14 +1849,6 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
 pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
     let left_text = "\n\n    ReLU-gated layout transitions\n    Smooth animations\n    Multi-panel widget\n    FFI bindings";
     let right_text = "\n\n    Try Shift+T for test mode\n    Try Shift+C for colors\n    Try Shift+M for charts\n    Try Shift+G to hide grid\n   Try Shift+A to automate tui";
-    let line_width = |text: &str| {
-        text.lines()
-            .map(|line| line.len() as u16)
-            .max()
-            .unwrap_or(0)
-            + 5
-    };
-
     MultiPanel::new()
         .header_title("Help")
         .left_title("About")
@@ -1881,13 +1872,20 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .main_content({
             let keyboard_state = _app.keyboard_state.clone();
             move |_state, area, buf| {
+                use ratatui::layout::{Constraint, Direction, Layout};
                 use ratatui::widgets::StatefulWidget;
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Length(3), Constraint::Min(0)])
+                    .split(area);
+                let output = keyboard_state.borrow().last_output.clone();
+                let p = Paragraph::new(output).alignment(Alignment::Center);
+                Widget::render(p, chunks[0], buf);
                 let widget = KeyboardWidget::default();
                 let mut st = keyboard_state.borrow_mut();
-                StatefulWidget::render(widget, area, buf, &mut st);
+                StatefulWidget::render(widget, chunks[1], buf, &mut st);
             }
-        })
-        .footer_content(|_state, area, buf| {
+        })        .footer_content(|_state, area, buf| {
             let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
             Widget::render(p, area, buf);
         })
@@ -1896,10 +1894,10 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .right_color(Color::Magenta)
         .main_color(Color::Reset)
         .footer_color(Color::Yellow)
-        .panel_height(3)
-        .sidebar_width_fraction(0.2)
-        .left_sidebar_min_width(line_width(left_text))
-        .right_sidebar_min_width(line_width(right_text))
+        .panel_height(1)
+        .sidebar_width_fraction(0.0)
+        .left_sidebar_min_width(0)
+        .right_sidebar_min_width(0)
 }
 
 /// Encode panel targets and boost flags into an 8-bit state vector.
