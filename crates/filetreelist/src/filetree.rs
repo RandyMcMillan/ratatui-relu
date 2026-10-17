@@ -1,5 +1,4 @@
-use std::{collections::BTreeSet, path::Path, usize};
-
+use std::{collections::BTreeSet, path::Path};
 use crate::{error::Result, filetreeitems::FileTreeItems, tree_iter::TreeIterator, TreeItemInfo};
 
 ///
@@ -23,7 +22,7 @@ pub struct VisualSelection {
 
 /// wraps `FileTreeItems` as a datastore and adds selection
 /// functionality
-#[derive(Default)]
+#[derive(Default, Clone, Debug)]
 pub struct FileTree {
     items: FileTreeItems,
     selection: Option<usize>,
@@ -85,6 +84,26 @@ impl FileTree {
                 Some(item.info())
             }
         })
+    }
+
+    /// Returns the currently selected item, if any.
+    pub fn selected_item(&self) -> Option<&crate::item::FileTreeItem> {
+        self.selection.and_then(|index| self.items.tree_items.get(index))
+    }
+
+    /// Returns the full path of the currently selected item, if any.
+    pub fn selected_path(&self) -> Option<&std::path::Path> {
+        self.selected_item().map(|item| item.info().full_path())
+    }
+
+    /// Number of items (files and folders) in the tree.
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
+    /// Number of currently visible items.
+    pub fn visible_count(&self) -> usize {
+        self.items.iterate(0, self.items.len()).count()
     }
 
     /// Search forward from the current selection and jump to the next

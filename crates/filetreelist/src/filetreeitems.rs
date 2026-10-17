@@ -1,9 +1,7 @@
 use std::{
     collections::{BTreeSet, HashMap},
     path::{Path, PathBuf},
-    usize,
 };
-
 use crate::{
     error::{Error, Result},
     item::{FileTreeItemKind, PathCollapsed},
@@ -12,7 +10,7 @@ use crate::{
 };
 
 ///
-#[derive(Default)]
+#[derive(Default, Clone, Debug)]
 pub struct FileTreeItems {
     pub tree_items: Vec<FileTreeItem>,
     files: usize,

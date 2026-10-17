@@ -4,3 +4,4 @@ pub mod layout;
 pub mod mouse;
 pub mod multi_panel;
 pub mod report_grid;
+pub mod file_tree;
