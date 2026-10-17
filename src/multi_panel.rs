@@ -1891,7 +1891,7 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
     let left_text = "\n\n    ReLU-gated layout transitions\n    Smooth animations\n    Multi-panel widget\n    FFI bindings";
     let right_text = "\n\n    Try Shift+T for test mode\n    Try Shift+C for colors\n    Try Shift+M for charts\n    Try Shift+G to hide grid\n   Try Shift+A to automate tui";
     MultiPanel::new()
-        .header_title("Help")
+        .header_title("Help>>>")
         .left_title("About")
         .right_title("Tips")
         .main_title("Main")
@@ -1919,7 +1919,8 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
                 use ratatui::widgets::StatefulWidget;
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Length(1), Constraint::Min(0),Constraint::Min(0), Constraint::Length(1)])
+                                 //0                     //1                     //2 
+                    .constraints([Constraint::Ratio(1,5), Constraint::Ratio(1,5), Constraint::Ratio(1,2), Constraint::Ratio(0,10)])
                     .split(area);
                 let output = keyboard_state.borrow().last_output.clone();
                 let p = Paragraph::new(output).alignment(Alignment::Center);
@@ -1928,7 +1929,9 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
                 let widget = KeyboardWidget::default();
                 let mut st = keyboard_state.borrow_mut();
                 StatefulWidget::render(table.clone(), chunks[1], buf, &mut table_state.borrow_mut()); // display toggle controls 25% height
-                StatefulWidget::render(widget, chunks[2], buf, &mut st); // display keyboard on
+                StatefulWidget::render(widget.clone(), chunks[2], buf, &mut st); // display keyboard on
+                                                                         // bottom
+                StatefulWidget::render(widget, chunks[3], buf, &mut st); // display keyboard on
                                                                          // bottom
             }
         })        .footer_content(|_state, area, buf| {
