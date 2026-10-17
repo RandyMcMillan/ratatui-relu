@@ -530,17 +530,17 @@ fn state_help_text(app: &MultiPanelApp) -> String {
     let boost = |bit: u8| if (bits >> bit) & 1 == 1 { "on" } else { "off" };
     format!(
         "State bits: {:08b}\n\
-        Header: {}  Left: {}  Right: {}  Footer: {}\n\
-        Top boost: {}  Bottom boost: {}  Left boost: {}  Right boost: {}",
+        Top: {}  Top boost: {}  Left: {}  Left boost: {}\n\
+        Right boost: {}  Right: {}  Bottom boost: {}  Bottom: {}",
         bits,
-        panel(BIT_HEADER),
-        panel(BIT_LEFT),
-        panel(BIT_RIGHT),
-        panel(BIT_FOOTER),
+        panel(BIT_TOP),
         boost(BIT_TOP_BOOST),
-        boost(BIT_BOTTOM_BOOST),
+        panel(BIT_LEFT),
         boost(BIT_LEFT_BOOST),
         boost(BIT_RIGHT_BOOST),
+        panel(BIT_RIGHT),
+        boost(BIT_BOTTOM_BOOST),
+        panel(BIT_BOTTOM),
     )
 }
 
@@ -811,16 +811,17 @@ impl StatefulWidget for StateHelpTable {
 }
 
 // State bit indices for matrix operations.
-// Panel bits:
-const BIT_HEADER: u8 = 0;
-const BIT_LEFT: u8 = 1;
+//
+// Bits are laid out MSB -> LSB as:
+//   Top | Top boost | Left | Left boost | Right boost | Right | Bottom boost | Bottom
+const BIT_TOP: u8 = 7;
+const BIT_TOP_BOOST: u8 = 6;
+const BIT_LEFT: u8 = 5;
+const BIT_LEFT_BOOST: u8 = 4;
+const BIT_RIGHT_BOOST: u8 = 3;
 const BIT_RIGHT: u8 = 2;
-const BIT_FOOTER: u8 = 3;
-// Boost bits:
-const BIT_TOP_BOOST: u8 = 4;
-const BIT_BOTTOM_BOOST: u8 = 5;
-const BIT_LEFT_BOOST: u8 = 6;
-const BIT_RIGHT_BOOST: u8 = 7;
+const BIT_BOTTOM_BOOST: u8 = 1;
+const BIT_BOTTOM: u8 = 0;
 
 /// Configuration for [`MultiPanelApp`].
 ///
@@ -1449,10 +1450,10 @@ pub fn state_bits(app: &MultiPanelApp) -> u8 {
     let panel_bit = |panel: &Transition, idx: u8| {
         if panel.target() > 0.5 { 1 << idx } else { 0 }
     };
-    panel_bit(&app.state.header, BIT_HEADER)
+    panel_bit(&app.state.header, BIT_TOP)
         | panel_bit(&app.state.left_sidebar, BIT_LEFT)
         | panel_bit(&app.state.right_sidebar, BIT_RIGHT)
-        | panel_bit(&app.state.footer, BIT_FOOTER)
+        | panel_bit(&app.state.footer, BIT_BOTTOM)
         | if app.top_boost { 1 << BIT_TOP_BOOST } else { 0 }
         | if app.bottom_boost {
             1 << BIT_BOTTOM_BOOST
@@ -1474,10 +1475,10 @@ pub fn state_bits(app: &MultiPanelApp) -> u8 {
 /// Apply an 8-bit state vector to the app (panels + boosts).
 pub fn set_state_bits(app: &mut MultiPanelApp, bits: u8) {
     let open = |idx: u8| if (bits >> idx) & 1 == 1 { 1.0 } else { 0.0 };
-    app.state.header.set_target(open(BIT_HEADER));
+    app.state.header.set_target(open(BIT_TOP));
     app.state.left_sidebar.set_target(open(BIT_LEFT));
     app.state.right_sidebar.set_target(open(BIT_RIGHT));
-    app.state.footer.set_target(open(BIT_FOOTER));
+    app.state.footer.set_target(open(BIT_BOTTOM));
     app.top_boost = (bits >> BIT_TOP_BOOST) & 1 == 1;
     app.bottom_boost = (bits >> BIT_BOTTOM_BOOST) & 1 == 1;
     app.left_boost = (bits >> BIT_LEFT_BOOST) & 1 == 1;
@@ -1486,13 +1487,13 @@ pub fn set_state_bits(app: &mut MultiPanelApp, bits: u8) {
 
 /// Transition matrix for arrow keys and Space over the full state space.
 ///
-/// State is an 8-bit vector: lower 4 bits are panel open/closed, upper 4 bits
-/// are boost flags (top, bottom, left, right).
+/// State is an 8-bit vector laid out MSB -> LSB as:
+///   Top | Top boost | Left | Left boost | Right boost | Right | Bottom boost | Bottom
 pub fn transition_matrix(state: u8, key: crossterm::event::KeyCode) -> u8 {
-    let h = (state >> BIT_HEADER) & 1;
+    let h = (state >> BIT_TOP) & 1;
     let l = (state >> BIT_LEFT) & 1;
     let r = (state >> BIT_RIGHT) & 1;
-    let f = (state >> BIT_FOOTER) & 1;
+    let f = (state >> BIT_BOTTOM) & 1;
     let top_b = (state >> BIT_TOP_BOOST) & 1;
     let bot_b = (state >> BIT_BOTTOM_BOOST) & 1;
     let left_b = (state >> BIT_LEFT_BOOST) & 1;
@@ -1539,10 +1540,10 @@ pub fn transition_matrix(state: u8, key: crossterm::event::KeyCode) -> u8 {
         _ => (h, l, r, f, top_b, bot_b, left_b, right_b),
     };
 
-    (nh << BIT_HEADER)
+    (nh << BIT_TOP)
         | (nl << BIT_LEFT)
         | (nr << BIT_RIGHT)
-        | (nf << BIT_FOOTER)
+        | (nf << BIT_BOTTOM)
         | (ntop_b << BIT_TOP_BOOST)
         | (nbot_b << BIT_BOTTOM_BOOST)
         | (nleft_b << BIT_LEFT_BOOST)
