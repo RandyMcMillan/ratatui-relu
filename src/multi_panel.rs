@@ -848,8 +848,13 @@ pub struct MultiPanelAppConfig {
     /// mode. A fresh widget is built each frame because Ratatui widgets are
     /// consumed when rendered.
     pub widget_builder: Box<dyn Fn(&MultiPanelApp) -> MultiPanel>,
-    /// Optional path for `load`/`save`. If `None`, the default config directory
-    /// is used.
+    /// Optional path for `load`/`save`.
+    ///
+    /// - `None`: use [`MultiPanelApp::default_config_path`]
+    ///   (`<config_dir>/ratatui-relu/multi_panel_app.json`).
+    /// - `Some(path)`: persist to the given file. Parent directories are
+    ///   created automatically on save. Relative paths are resolved against the
+    ///   process working directory.
     pub save_path: Option<std::path::PathBuf>,
 }
 

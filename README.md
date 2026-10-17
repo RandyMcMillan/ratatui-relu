@@ -89,6 +89,66 @@ let config = MultiPanelAppConfig {
 let mut app = MultiPanelApp::with_config(config);
 ```
 
+## Persistence and app state
+
+`MultiPanelApp` automatically tries to load persisted state on construction and
+can save it again later with [`MultiPanelApp::save`].
+
+### Choosing where state is stored
+
+State is read from and written to `MultiPanelAppConfig::save_path`:
+
+```rust
+use std::path::PathBuf;
+use ratatui_relu::multi_panel::{MultiPanelApp, MultiPanelAppConfig, MultiPanel};
+
+let config = MultiPanelAppConfig {
+    widget_builder: Box::new(|_app| MultiPanel::new()),
+    // Custom location. Parent directories are created automatically.
+    save_path: Some(PathBuf::from("/tmp/my_app_state.json")),
+    // `None` uses the default path:
+    // ~/.config/ratatui-relu/multi_panel_app.json
+    // save_path: None,
+};
+
+let mut app = MultiPanelApp::with_config(config);
+
+// Persist the current state.
+app.save()?;
+
+// Load state from the configured path (returns None if the file is missing
+// or cannot be parsed).
+if let Some(loaded) = app.load() {
+    app = loaded;
+}
+```
+
+Options:
+
+- `save_path: None` — use `MultiPanelApp::default_config_path()`,
+  i.e. `<config_dir>/ratatui-relu/multi_panel_app.json`.
+- `save_path: Some(path)` — use the given file. A relative path is resolved
+  against the process working directory. Parent directories are created on save.
+- `MultiPanelApp::load()` reads from the same configured path.
+- `MultiPanelApp::save()` writes pretty-printed JSON and creates parent dirs.
+
+### App state syntax
+
+State is serialized as JSON. Persisted fields include:
+
+- `state` — panel open/closed and transition state.
+- `left_boost`, `right_boost`, `top_boost`, `bottom_boost` — boost flags.
+- `show_grid` — whether the neighbor report grid is visible.
+- `file_tree_data` — persisted file tree collapse/selection/scroll state.
+- `file_view_scrolls` — per-file scroll positions.
+- `selected_file` — currently selected file path.
+- `line_numbers` — line number display toggle.
+
+Fields marked `#[serde(skip)]` (such as `file_tree_state`, `git`, `test_mode`,
+`config`, and transient UI state) are rebuilt at runtime and are not part of the
+saved file. Unknown fields are ignored on load, so older or newer state files
+remain compatible where possible.
+
 ## License
 
 MIT OR Apache-2.0
