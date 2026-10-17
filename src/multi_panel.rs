@@ -1171,7 +1171,11 @@ impl MultiPanelApp {
                         self.main_scroll = self.main_scroll.saturating_add(1);
                     }
                     KeyCode::Left => {
-                        self.main_scroll = self.main_scroll.saturating_sub(20);
+                        if self.main_boost {
+                            self.main_boost = false;
+                        } else {
+                            self.main_scroll = self.main_scroll.saturating_sub(20);
+                        }
                     }
                     KeyCode::Right => {
                         // Boost the main view.
