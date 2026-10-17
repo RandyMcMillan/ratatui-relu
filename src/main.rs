@@ -78,7 +78,7 @@ fn run_app(
                                 crossterm::event::KeyCode::Tab => vec![b'\t'],
                                 _ => vec![],
                             };
-                            if let Some(term) = &mut app.terminal {
+                            if let Some(term) = &mut *app.terminal.borrow_mut() {
                                 term.write_input(&bytes);
                             }
                         }

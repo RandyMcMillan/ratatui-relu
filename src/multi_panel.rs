@@ -910,7 +910,7 @@ pub struct MultiPanelApp {
     pub git: Option<GitState>,
     /// Embedded terminal state.
     #[serde(skip)]
-    pub terminal: Option<TerminalState>,
+    pub terminal: Rc<RefCell<Option<TerminalState>>>, 
     /// Currently selected file path (loaded on Enter).
     #[serde(default)]
     pub selected_file: Option<std::path::PathBuf>,
@@ -978,7 +978,7 @@ impl std::fmt::Debug for MultiPanelApp {
             .field("file_tree_data", &"<FileTreeState>")
             .field("keyboard_state", &"<KeyboardState>")
             .field("git", &self.git.is_some())
-            .field("terminal", &self.terminal.is_some())
+            .field("terminal", &self.terminal.borrow().is_some())
             .field("selected_file", &self.selected_file)
             .field("file_preview", &self.file_preview)
             .field("main_active", &self.main_active)
@@ -1051,8 +1051,8 @@ impl MultiPanelApp {
             if app.git.is_none() {
                 app.git = GitState::new();
             }
-            if app.terminal.is_none() {
-                app.terminal = TerminalState::new();
+            if app.terminal.borrow().is_none() {
+                *app.terminal.borrow_mut() = TerminalState::new();
             }
             if app.keyboard_state.borrow().keys.is_empty() {
                 *app.keyboard_state.borrow_mut() = crate::keyboard::KeyboardState::new();
@@ -1083,7 +1083,7 @@ impl MultiPanelApp {
             file_tree_data: FileTreeState::default(),
             file_view_scrolls: HashMap::new(),
             git: GitState::new(),
-            terminal: TerminalState::new(),
+            terminal: Rc::new(RefCell::new(TerminalState::new())), 
             selected_file: None,
             file_preview: String::new(),
             main_active: false,
@@ -1148,7 +1148,7 @@ impl MultiPanelApp {
             let items = git.status_items.clone();
             self.file_tree_state.borrow_mut().set_git_status(items);
         }
-        if let Some(term) = &mut self.terminal {
+        if let Some(term) = &mut *self.terminal.borrow_mut() {
             term.poll();
         }
         self.file_tree_data = self.file_tree_state.borrow().snapshot();
@@ -1517,6 +1517,10 @@ impl MultiPanelApp {
             (KeyCode::Char('m'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.chart_mode = !self.chart_mode;
             }
+            // Terminal view
+            (KeyCode::Char('f'), m) if m.contains(KeyModifiers::SHIFT) => {
+                self.show_terminal = !self.show_terminal;
+            }
             _ => self.handle_key(key.code),
         }
     }
@@ -1562,7 +1566,7 @@ impl MultiPanelApp {
         } else if self.show_terminal {
             let area = f.area();
             Clear.render(area, f.buffer_mut());
-            if let Some(term) = &mut self.terminal {
+            if let Some(term) = &mut *self.terminal.borrow_mut() {
                 term.poll();
                 use tui_term::widget::PseudoTerminal;
                 let pseudo = PseudoTerminal::new(term.parser.screen());
@@ -1674,6 +1678,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     } else {
         (left_fraction, right_fraction, header_height, footer_height)
     };
+    let terminal_state = app.terminal.clone();
     let git_diff_text = app
         .git
         .as_ref()
@@ -1712,7 +1717,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         .left_title("Left")
         .right_title("Right")
         .main_title("")
-        .footer_title("Footer")
+        .footer_title("")
         .header_content(move |_state, area, buf| {
             let top = Rect::new(area.x, area.y, area.width, 1.min(area.height));
             let p = Paragraph::new("↑ top").alignment(Alignment::Center);
@@ -1817,14 +1822,33 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             }
         })
         .footer_content(move |_state, area, buf| {
-            let bottom = Rect::new(
-                area.x,
-                area.y + area.height.saturating_sub(1),
-                area.width,
-                1.min(area.height),
+            let halves = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(area);
+            Widget::render(
+                Paragraph::new(help).alignment(Alignment::Left),
+                halves[0],
+                buf,
             );
-            let p = Paragraph::new(help).alignment(Alignment::Center);
-            Widget::render(p, bottom, buf);
+            let mut term_guard = terminal_state.borrow_mut();
+            if let Some(term) = term_guard.as_mut() {
+                term.poll();
+                use tui_term::widget::PseudoTerminal;
+                let block = Block::default().borders(Borders::ALL).title("Terminal");
+                let inner = block.inner(halves[1]);
+                Widget::render(block, halves[1], buf);
+                if inner.width > 0 && inner.height > 0 {
+                    let pseudo = PseudoTerminal::new(term.parser.screen());
+                    Widget::render(pseudo, inner, buf);
+                }
+            } else {
+                Widget::render(
+                    Paragraph::new("<terminal>").alignment(Alignment::Right),
+                    halves[1],
+                    buf,
+                );
+            }
         })
         .header_color(color_demo_color.unwrap_or(Color::Blue))
         .left_color(color_demo_color.unwrap_or(Color::Green))
