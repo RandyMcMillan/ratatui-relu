@@ -8,7 +8,7 @@
 //! `Fn(Rect, &mut Buffer)`. If no custom content is supplied, the panel renders
 //! a default placeholder.
 
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, time::Duration};
 
 use crossterm::event::{KeyCode, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
@@ -884,11 +884,17 @@ pub struct MultiPanelApp {
     /// Shared state for the file tree rendered in the left panel.
     #[serde(skip)]
     pub file_tree_state: Rc<RefCell<FileTreeState>>,
+    /// Persisted file tree state.
+    #[serde(default)]
+    pub file_tree_data: FileTreeState,
+    /// Per-file view scroll positions.
+    #[serde(default)]
+    pub file_view_scrolls: HashMap<std::path::PathBuf, usize>,
     /// Async git state (if inside a git repo).
     #[serde(skip)]
     pub git: Option<GitState>,
     /// Currently selected file path (loaded on Enter).
-    #[serde(skip)]
+    #[serde(default)]
     pub selected_file: Option<std::path::PathBuf>,
     /// Preview text of the selected file.
     #[serde(skip)]
@@ -937,6 +943,7 @@ impl std::fmt::Debug for MultiPanelApp {
             .field("test_mode", &self.test_mode)
             .field("config", &"<MultiPanelAppConfig>")
             .field("file_tree_state", &"<FileTreeState>")
+            .field("file_tree_data", &"<FileTreeState>")
             .field("git", &self.git.is_some())
             .field("selected_file", &self.selected_file)
             .field("file_preview", &self.file_preview)
@@ -987,10 +994,20 @@ impl MultiPanelApp {
         if let Some(p) = path
             && let Some(mut app) = load_app_from_path(&p)
         {
-            if app.file_tree_state.borrow().paths().is_empty() {
+            if app.file_tree_data.paths().is_empty() && app.file_tree_state.borrow().paths().is_empty() {
                 app.file_tree_state
                     .borrow_mut()
                     .set_paths(default_file_tree_paths());
+            } else if !app.file_tree_data.paths().is_empty() {
+                app.file_tree_state
+                    .borrow_mut()
+                    .apply_persisted(&app.file_tree_data);
+            }
+            if let Some(path) = app.selected_file.clone() {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    app.file_preview = content;
+                }
+                app.main_scroll = app.file_view_scrolls.get(&path).copied().unwrap_or(0);
             }
             if app.git.is_none() {
                 app.git = GitState::new();
@@ -1018,6 +1035,8 @@ impl MultiPanelApp {
             file_tree_state: Rc::new(RefCell::new(FileTreeState::from_paths(
                 default_file_tree_paths(),
             ))),
+            file_tree_data: FileTreeState::default(),
+            file_view_scrolls: HashMap::new(),
             git: GitState::new(),
             selected_file: None,
             file_preview: String::new(),
@@ -1049,7 +1068,8 @@ impl MultiPanelApp {
     }
 
     /// Save app state to the configured path, or the default location.
-    pub fn save(&self) -> std::io::Result<()> {
+    pub fn save(&mut self) -> std::io::Result<()> {
+        self.file_tree_data = self.file_tree_state.borrow().snapshot();
         let path = self
             .config
             .save_path
@@ -1078,6 +1098,7 @@ impl MultiPanelApp {
             let items = git.status_items.clone();
             self.file_tree_state.borrow_mut().set_git_status(items);
         }
+        self.file_tree_data = self.file_tree_state.borrow().snapshot();
 
         if self.chart_mode {
             self.chart_time += dt.as_secs_f64();
@@ -1190,6 +1211,9 @@ impl MultiPanelApp {
                     }
                     _ => {}
                 }
+                if let Some(path) = &self.selected_file {
+                    self.file_view_scrolls.insert(path.clone(), self.main_scroll);
+                }
                 return;
             }
 
@@ -1212,7 +1236,11 @@ impl MultiPanelApp {
                         content
                     };
                     self.main_active = true;
-                    self.main_scroll = 0;
+                    self.main_scroll = self
+                        .selected_file
+                        .as_ref()
+                        .and_then(|p| self.file_view_scrolls.get(p).copied())
+                        .unwrap_or(0);
                     if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
                         git.fetch_diff(&path);
                     }
@@ -1234,7 +1262,11 @@ impl MultiPanelApp {
                         content
                     };
                     self.main_active = true;
-                    self.main_scroll = 0;
+                    self.main_scroll = self
+                        .selected_file
+                        .as_ref()
+                        .and_then(|p| self.file_view_scrolls.get(p).copied())
+                        .unwrap_or(0);
                     if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
                         git.fetch_diff(&path);
                     }
@@ -1278,9 +1310,10 @@ impl MultiPanelApp {
             ('f', 3),
             ('h', 3),
         ];
-        if let KeyCode::Char(c) = code {
-            if let Some((_, panel)) = PANEL_TOGGLE_KEYS.iter().find(|(k, _)| *k == c) {
-                match panel {
+        if let KeyCode::Char(c) = code
+            && let Some((_, panel)) = PANEL_TOGGLE_KEYS.iter().find(|(k, _)| *k == c)
+        {
+            match panel {
                     0 => self.state.header.toggle_between(0.0, 1.0),
                     1 => self.state.left_sidebar.toggle_between(0.0, 1.0),
                     2 => self.state.right_sidebar.toggle_between(0.0, 1.0),
@@ -1289,7 +1322,6 @@ impl MultiPanelApp {
                 }
                 return;
             }
-        }
 
         match code {
             // A = Automated Test Mode
