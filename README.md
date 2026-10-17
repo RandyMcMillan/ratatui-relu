@@ -10,7 +10,7 @@ Continuous, differentiable layout transitions for [Ratatui](https://github.com/r
 - **`MultiPanel`** — a reusable five-area widget (header, footer, left/right sidebars, main content) with custom content closures.
 - **`MultiPanelApp`** — a complete reusable application driver with key handling, persistence, boost modes, and an automated test matrix.
 - **`NeighborReportGrid`** — a 3×3 grid widget that reports the dimensions of neighboring panels.
-- **Exhaustive test matrix** — verifies all 256 panel/boost states × 4 arrow keys (1024 cases).
+- **`FileTreeWidget`** — a file/folder tree widget backed by `filetreelist`, with fold, selection, and keyboard navigation.- **Exhaustive test matrix** — verifies all 256 panel/boost states × 4 arrow keys (1024 cases).
 
 ## Quick start
 
@@ -67,7 +67,7 @@ cargo run --example smoothstep
 cargo run --example content_aware
 cargo run --example optimized_layout
 cargo run --example differentiable_constraints
-```
+cargo run --example file_tree```
 
 ## Customizing `MultiPanelApp`
 

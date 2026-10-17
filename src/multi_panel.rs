@@ -21,8 +21,8 @@ use ratatui::{
 };
 
 use crate::animation::{ColorTransition, Transition};
+use crate::file_tree::{FileTreeState, FileTreeWidget};
 use crate::mouse::{ButtonState, is_mouse_over};
-
 /// Mutable state for [`MultiPanel`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MultiPanelState {
@@ -875,6 +875,15 @@ pub struct MultiPanelApp {
     /// Whether the inner neighbor-report grid is visible.
     #[serde(default = "default_show_grid")]
     pub show_grid: bool,
+    /// Shared state for the file tree rendered in the left panel.
+    #[serde(skip)]
+    pub file_tree_state: Rc<RefCell<FileTreeState>>,
+    /// Currently selected file path (loaded on Enter).
+    #[serde(skip)]
+    pub selected_file: Option<std::path::PathBuf>,
+    /// Preview text of the selected file.
+    #[serde(skip)]
+    pub file_preview: String,
     /// Whether the full-screen help overlay is visible.
     #[serde(skip)]
     pub show_help: bool,
@@ -909,6 +918,9 @@ impl std::fmt::Debug for MultiPanelApp {
             .field("bottom_boost", &self.bottom_boost)
             .field("test_mode", &self.test_mode)
             .field("config", &"<MultiPanelAppConfig>")
+            .field("file_tree_state", &"<FileTreeState>")
+            .field("selected_file", &self.selected_file)
+            .field("file_preview", &self.file_preview)
             .finish()
     }
 }
@@ -953,6 +965,11 @@ impl MultiPanelApp {
         if let Some(p) = path
             && let Some(mut app) = load_app_from_path(&p)
         {
+            if app.file_tree_state.borrow().paths().is_empty() {
+                app.file_tree_state
+                    .borrow_mut()
+                    .set_paths(default_file_tree_paths());
+            }
             app.config = config;
             return app;
         }
@@ -973,6 +990,11 @@ impl MultiPanelApp {
             top_boost: true,
             bottom_boost: true,
             show_grid: true,
+            file_tree_state: Rc::new(RefCell::new(FileTreeState::from_paths(
+                default_file_tree_paths(),
+            ))),
+            selected_file: None,
+            file_preview: String::new(),
             show_help: false,
             color_demo: false,
             color_demo_transition: None,
@@ -1104,6 +1126,36 @@ impl MultiPanelApp {
 
     /// Handle a key press (real or simulated).
     pub fn handle_key(&mut self, code: KeyCode) {
+        // When the left panel is open it is active: arrow keys navigate the
+        // file tree instead of driving panel transitions.
+        if self.state.left_sidebar.target() > 0.5
+            && matches!(
+                code,
+                KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right
+            )
+        {
+            self.file_tree_state.borrow_mut().handle_key(code);
+            return;
+        }
+
+        // Load the selected file into the main panel on Enter.
+        if matches!(code, KeyCode::Enter) {
+            if let Some(path) = self.file_tree_state.borrow().selected_path() {
+                let path = path.to_path_buf();
+                self.selected_file = Some(path.clone());
+                let content = std::fs::read_to_string(&path)
+                    .unwrap_or_else(|e| format!("Error reading file: {}", e));
+                self.file_preview = if content.len() > 100_000 {
+                    let mut t = content[..100_000].to_string();
+                    t.push_str("\n... (truncated)");
+                    t
+                } else {
+                    content
+                };
+            }
+            return;
+        }
+
         match code {
             // A = Automated Test Mode
             KeyCode::Char('A') => {
@@ -1125,7 +1177,27 @@ impl MultiPanelApp {
             KeyCode::Char('r') => self.state.right_sidebar.toggle_between(0.0, 1.0),
             KeyCode::Char('f') => self.state.footer.toggle_between(0.0, 1.0),
             KeyCode::Char(' ') => self.state.toggle_all(),
-            // right handed                 // left handed
+            // File tree navigation in the left panel.
+            KeyCode::Char('j') => {
+                self.file_tree_state
+                    .borrow_mut()
+                    .handle_key(KeyCode::Down);
+            }
+            KeyCode::Char('k') => {
+                self.file_tree_state
+                    .borrow_mut()
+                    .handle_key(KeyCode::Up);
+            }
+            KeyCode::Char('h') => {
+                self.file_tree_state
+                    .borrow_mut()
+                    .handle_key(KeyCode::Left);
+            }
+            KeyCode::Char('L') => {
+                self.file_tree_state
+                    .borrow_mut()
+                    .handle_key(KeyCode::Right);
+            }            // right handed                 // left handed
             KeyCode::Char('\\') | KeyCode::Char('q') => self.show_help = !self.show_help,
             KeyCode::Up => {
                 let top_closed = self.state.header.target() < 0.5;
@@ -1262,6 +1334,33 @@ fn bit_display(bits: u8) -> String {
         .join(" ")
 }
 
+fn default_file_tree_paths() -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    fn walk(dir: &std::path::Path, depth: usize, out: &mut Vec<std::path::PathBuf>) {
+        if depth == 0 {
+            return;
+        }
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for e in entries.flatten() {
+            let p = e.path();
+            let name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            if name == "target" || name == ".git" || name == "node_modules" {
+                continue;
+            }
+            if p.is_dir() {
+                out.push(p.clone());
+                walk(&p, depth - 1, out);
+            } else {
+                out.push(p);
+            }
+        }
+    }
+    walk(std::path::Path::new("."), 3, &mut out);
+    out
+}
+
 fn load_app_from_path(path: &std::path::Path) -> Option<MultiPanelApp> {
     let bytes = std::fs::read(path).ok()?;
     serde_json::from_slice(&bytes).ok()
@@ -1282,8 +1381,10 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     let footer_height = app.footer_height();
     let show_grid = app.show_grid;
     let chart_mode = app.chart_mode;
+    let file_tree_state = app.file_tree_state.clone();
     let chart_time = app.chart_time;
-    let color_demo_color = app.color_demo_transition.as_ref().map(|ct| ct.current());
+    let file_preview = app.file_preview.clone();
+    let selected_file = app.selected_file.clone();    let color_demo_color = app.color_demo_transition.as_ref().map(|ct| ct.current());
     let test_bits = app.test_mode.as_ref().map(|_| state_bits(app));
     let test_label = app.test_mode.as_ref().map(|t| {
         format!(
@@ -1306,9 +1407,14 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             let p = Paragraph::new("↑ top").alignment(Alignment::Center);
             Widget::render(p, top, buf);
         })
-        .left_content(|_state, area, buf| {
-            let p = Paragraph::new("← left").alignment(Alignment::Left);
-            Widget::render(p, area, buf);
+        .left_content({
+            let file_tree_state = file_tree_state.clone();
+            move |_state, area, buf| {
+                use ratatui::widgets::StatefulWidget;
+                let mut state = file_tree_state.borrow_mut();
+                let widget = FileTreeWidget::new();
+                StatefulWidget::render(widget, area, buf, &mut state);
+            }
         })
         .right_content(|_state, area, buf| {
             let p = Paragraph::new("right →").alignment(Alignment::Right);
@@ -1318,7 +1424,21 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             use crate::chart::ChartDemo;
             use crate::report_grid::NeighborReportGrid;
             use ratatui::widgets::Clear;
-            if chart_mode {
+            if !file_preview.is_empty() {
+                let title = selected_file
+                    .as_ref()
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("preview");
+                let block = ratatui::widgets::Block::bordered().title(title);
+                let inner = block.inner(area);
+                ratatui::widgets::Widget::render(block, area, buf);
+                if inner.width > 0 && inner.height > 0 {
+                    let p = ratatui::widgets::Paragraph::new(file_preview.clone())
+                        .wrap(ratatui::widgets::Wrap { trim: false });
+                    ratatui::widgets::Widget::render(p, inner, buf);
+                }
+            } else if chart_mode {
                 Widget::render(ChartDemo::new(chart_time), area, buf);
             } else if show_grid {
                 let grid = NeighborReportGrid::new(
@@ -1498,6 +1618,12 @@ pub fn transition_matrix(state: u8, key: crossterm::event::KeyCode) -> u8 {
     let bot_b = (state >> BIT_BOTTOM_BOOST) & 1;
     let left_b = (state >> BIT_LEFT_BOOST) & 1;
     let right_b = (state >> BIT_RIGHT_BOOST) & 1;
+
+    // When the left panel is open, arrow keys drive the file tree and do not
+    // change panel/boost state.
+    if l == 1 && matches!(key, KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right) {
+        return state;
+    }
 
     let (nh, nl, nr, nf, ntop_b, nbot_b, nleft_b, nright_b) = match key {
         KeyCode::Up => {
