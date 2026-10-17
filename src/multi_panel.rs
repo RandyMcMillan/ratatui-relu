@@ -722,34 +722,58 @@ impl StatefulWidget for StateHelpTable {
         let rows = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Ratio(1, 4),
-                Constraint::Ratio(1, 4),
-                Constraint::Ratio(1, 4),
-                Constraint::Ratio(1, 4),
+                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 3),
             ])
             .split(sections[1]);
 
-        for (i, (cell, label, is_on)) in self.cells.iter().enumerate() {
-            let row = i / 2;
-            let col = i % 2;
-            let cols = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                .split(rows[row]);
-            let cell_area = cols[col];
-            state.button_states[cell.index()].last_area = Some(cell_area);
+        let mut render_cell = |i: usize, area: Rect| {
+            let (cell, label, is_on) = &self.cells[i];
+            state.button_states[cell.index()].last_area = Some(area);
 
             let border_color = if *is_on { Color::Green } else { Color::Magenta };
             let block = Block::bordered()
                 .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(border_color));
-            let inner = block.inner(cell_area);
-            Widget::render(block, cell_area, buf);
+            let inner = block.inner(area);
+            Widget::render(block, area, buf);
             if inner.width > 0 && inner.height > 0 {
                 let p = Paragraph::new(Line::from(label.as_str())).alignment(Alignment::Center);
                 Widget::render(p, inner, buf);
             }
-        }
+        };
+
+        // Top row: header + top boost.
+        let top_cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(rows[0]);
+        render_cell(0, top_cols[0]); // Header
+        render_cell(1, top_cols[1]); // Top boost
+
+        // Middle row: left and right options combined.
+        let mid_cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(25),
+                Constraint::Percentage(25),
+                Constraint::Percentage(25),
+                Constraint::Percentage(25),
+            ])
+            .split(rows[1]);
+        render_cell(2, mid_cols[0]); // Left
+        render_cell(5, mid_cols[1]); // Left boost
+        render_cell(7, mid_cols[2]); // Right boost
+        render_cell(4, mid_cols[3]); // Right
+
+        // Bottom row: footer + bottom boost.
+        let bot_cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(rows[2]);
+        render_cell(6, bot_cols[0]); // Footer
+        render_cell(3, bot_cols[1]); // Bottom boost
     }
 }
 
