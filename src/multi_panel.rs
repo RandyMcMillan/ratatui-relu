@@ -1414,7 +1414,7 @@ impl MultiPanelApp {
             KeyCode::Char('M') => self.chart_mode = !self.chart_mode,
             KeyCode::Char(' ') => self.state.toggle_all(),
             KeyCode::Char('n') => self.line_numbers = !self.line_numbers,
-            KeyCode::Char('x') => self.show_terminal = !self.show_terminal,
+            KeyCode::Char('x') => self.footer_terminal_focus = true,
             // File tree navigation in the left panel.
             KeyCode::Char('j') => {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Down);
@@ -1733,7 +1733,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     let left_fraction = app.left_sidebar_fraction();
     let right_fraction = app.right_sidebar_fraction();
     let header_height = app.header_height();
-    let footer_height = if app.footer_terminal_focus { 0 } else { app.footer_height() };
+    let footer_height = if app.footer_terminal_focus { 20u16 } else { app.footer_height() };
     let show_grid = app.show_grid;
     let chart_mode = app.chart_mode;
     let file_tree_state = app.file_tree_state.clone();
@@ -1912,6 +1912,9 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                 use tui_term::widget::PseudoTerminal;
                 let block = Block::default().borders(Borders::ALL).title("Terminal");
                 let inner = block.inner(halves[1]);
+                if inner.width > 0 && inner.height > 0 {
+                    term.resize(inner.height, inner.width);
+                }
                 Widget::render(block, halves[1], buf);
                 if inner.width > 0 && inner.height > 0 {
                     let pseudo = PseudoTerminal::new(term.parser.screen());

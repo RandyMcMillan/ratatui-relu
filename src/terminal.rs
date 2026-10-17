@@ -83,12 +83,16 @@ impl TerminalState {
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) {
+        let (cur_rows, cur_cols) = self.parser.screen().size();
+        if cur_rows == rows && cur_cols == cols {
+            return;
+        }
         let _ = self.master.resize(PtySize {
             rows,
             cols,
             pixel_width: 0,
             pixel_height: 0,
         });
-        self.parser = vt100::Parser::new(rows, cols, 1000);
+        self.parser.screen_mut().set_size(rows, cols);
     }
 }

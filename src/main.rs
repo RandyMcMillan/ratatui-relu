@@ -63,6 +63,14 @@ fn run_app(
                     if app.footer_terminal_focus {
                         if key.code == crossterm::event::KeyCode::Esc {
                             app.footer_terminal_focus = false;
+                        } else if key.code == crossterm::event::KeyCode::Up {
+                            if let Some(term) = &mut *app.terminal.borrow_mut() {
+                                term.scroll_up(5);
+                            }
+                        } else if key.code == crossterm::event::KeyCode::Down {
+                            if let Some(term) = &mut *app.terminal.borrow_mut() {
+                                term.scroll_down(5);
+                            }
                         } else if key.code == crossterm::event::KeyCode::PageUp {
                             if let Some(term) = &mut *app.terminal.borrow_mut() {
                                 term.scroll_up(10);
