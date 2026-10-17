@@ -1,4 +1,4 @@
-# ratatui-relu
+# ratatui-relu [![Release](https://github.com/RandyMcMillan/ratatui-relu/actions/workflows/release.yml/badge.svg?event=release)](https://github.com/RandyMcMillan/ratatui-relu/actions/workflows/release.yml)
 
 Continuous, differentiable layout transitions for [Ratatui](https://github.com/ratatui/ratatui).
 
