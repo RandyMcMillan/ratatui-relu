@@ -489,11 +489,11 @@ fn help_text() -> Text<'static> {
     let mut lines = Vec::new();
 
     let rows = [
-        ("h / l / r / f", "toggle header / left / right / footer"),
+        ("t / l / r / f", "toggle header / left / right / footer"),
         ("Space", "toggle all panels"),
         ("↑ / ↓", "close top / bottom and boost opposite"),
         ("← / →", "close side and boost opposite"),
-        ("Shift+H", "hide / show inner grid"),
+        ("Shift+A", "hide / show inner grid"),
         ("Shift+T", "start / stop automated test matrix"),
         ("Shift+C", "toggle color transition demo"),
         ("Shift+M", "toggle chart dashboard"),
@@ -1105,8 +1105,8 @@ impl MultiPanelApp {
     /// Handle a key press (real or simulated).
     pub fn handle_key(&mut self, code: KeyCode) {
         match code {
-            // T = Test Mode
-            KeyCode::Char('T') => {
+            // A = Automated Test Mode
+            KeyCode::Char('A') => {
                 if self.test_mode.is_some() {
                     self.stop_test_mode();
                 } else {
@@ -1118,9 +1118,9 @@ impl MultiPanelApp {
             // t = top
             KeyCode::Char('t') => self.state.header.toggle_between(0.0, 1.0),
             // Color demo
-            KeyCode::Char('c') => self.color_demo = !self.color_demo,
+            KeyCode::Char('C') => self.color_demo = !self.color_demo,
             // Chart mode
-            KeyCode::Char('m') => self.chart_mode = !self.chart_mode,
+            KeyCode::Char('M') => self.chart_mode = !self.chart_mode,
             KeyCode::Char('l') => self.state.left_sidebar.toggle_between(0.0, 1.0),
             KeyCode::Char('r') => self.state.right_sidebar.toggle_between(0.0, 1.0),
             KeyCode::Char('f') => self.state.footer.toggle_between(0.0, 1.0),
@@ -1293,7 +1293,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             TEST_KEYS.len(),
         )
     });
-    let help = "[h/l/r/f] toggle  [Space] all  [↑↓←→] boost  [Shift+H] hide grid  [Shift+T] test  [Shift+C] colors  [Shift+M] charts  [\\] help  [q] quit";
+    let help = "[t/l/r/f] toggle  [Space] all  [↑↓←→] boost  [Shift+A] automate tui  [Shift+T] test  [Shift+C] colors  [Shift+M] charts  [\\] help  [q] quit";
 
     MultiPanel::new()
         .header_title("Header")
@@ -1366,7 +1366,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
 /// multi-panel layout.
 pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
     let left_text = "\n\n    ReLU-gated layout transitions\n    Smooth animations\n    Multi-panel widget\n    FFI bindings";
-    let right_text = "\n\n    Try Shift+T for test mode\n    Try Shift+C for colors\n    Try Shift+M for charts\n    Try Shift+H to hide grid";
+    let right_text = "\n\n    Try Shift+T for test mode\n    Try Shift+C for colors\n    Try Shift+M for charts\n    Try Shift+G to hide grid\n   Try Shift+A to automate tui";
     let line_width = |text: &str| {
         text.lines()
             .map(|line| line.len() as u16)
