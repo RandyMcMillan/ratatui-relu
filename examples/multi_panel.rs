@@ -2,7 +2,7 @@
 //!
 //! Demonstrates the reusable [`MultiPanelApp`] from `ratatui_relu::multi_panel`.
 //!
-//! Run in a real terminal with: cargo run --example multi_panel
+//! Run in a real terminal with: cargo run
 
 use std::io::{self, Stdout, stdout};
 use std::time::Instant;
@@ -14,15 +14,20 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use ratatui_relu::multi_panel::MultiPanelApp;
+use ratatui_relu::{
+    mouse::{disable_mouse_capture, enable_mouse_capture},
+    multi_panel::MultiPanelApp,
+};
 
 fn setup_terminal() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
     stdout().execute(EnterAlternateScreen)?;
     enable_raw_mode()?;
+    enable_mouse_capture()?;
     Terminal::new(CrosstermBackend::new(stdout()))
 }
 
 fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
+    disable_mouse_capture()?;
     disable_raw_mode()?;
     terminal.backend_mut().execute(LeaveAlternateScreen)?;
     Ok(())
@@ -52,20 +57,55 @@ fn run_app(
         app.update(dt);
         terminal.draw(|f| app.render(f))?;
 
-        if event::poll(std::time::Duration::from_millis(16))?
-            && let Event::Key(key) = event::read()?
-            && key.kind == KeyEventKind::Press
-        {
-            app.handle_key_event(key);
-            if matches!(
-                key.code,
-                crossterm::event::KeyCode::Char('q') | crossterm::event::KeyCode::Esc
-            ) {
-                break;
+        if event::poll(std::time::Duration::from_millis(16))? {
+            match event::read()? {
+                Event::Key(key) if key.kind == KeyEventKind::Press => {
+                    if key.code == crossterm::event::KeyCode::Char('e') {
+                        if let Some(path) = app.selected_file.clone() {
+                            // Suspend the TUI and launch the user's editor.
+                            disable_mouse_capture()?;
+                            disable_raw_mode()?;
+                            terminal.backend_mut().execute(LeaveAlternateScreen)?;
+                            let editor =
+                                std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+                            let _ = std::process::Command::new(&editor).arg(&path).status();
+                            // Restore the TUI.
+                            stdout().execute(EnterAlternateScreen)?;
+                            enable_raw_mode()?;
+                            enable_mouse_capture()?;
+                            terminal.clear()?;
+                            // Reload the preview after editing.
+                            if let Ok(content) = std::fs::read_to_string(&path) {
+                                app.file_preview = content;
+                            }
+                        }
+                    } else if key.code == crossterm::event::KeyCode::Esc && app.show_help {
+                        app.show_help = false;
+                    } else if key.code == crossterm::event::KeyCode::Esc && app.main_active {
+                        if app.main_boost {
+                            app.main_boost = false;
+                        } else {
+                            app.main_active = false;
+                            // keep view state app.main_scroll = 0;
+                        }
+                    } else {
+                        app.handle_key_event(key);
+                        if matches!(
+                            key.code,
+                            crossterm::event::KeyCode::Char('q') // TODO Esc not exit app | crossterm::event::KeyCode::Esc
+                        ) {
+                            break;
+                        }
+                    }
+                    // Repaint immediately after a key press so state changes
+                    // are visible right away.
+                    terminal.draw(|f| app.render(f))?;
+                }
+                Event::Mouse(mouse) => {
+                    app.handle_mouse(mouse);
+                }
+                _ => {}
             }
-            // Repaint immediately after a key press so state changes (like
-            // starting test mode) are visible right away.
-            terminal.draw(|f| app.render(f))?;
         }
     }
     Ok(())
