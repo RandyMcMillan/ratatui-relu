@@ -108,12 +108,20 @@ impl ColorTransition {
 
     /// The current interpolated color.
     pub fn current(&self) -> Color {
-        Color::Rgb(self.r.current() as u8, self.g.current() as u8, self.b.current() as u8)
+        Color::Rgb(
+            self.r.current() as u8,
+            self.g.current() as u8,
+            self.b.current() as u8,
+        )
     }
 
     /// The target color.
     pub fn target(&self) -> Color {
-        Color::Rgb(self.r.target() as u8, self.g.target() as u8, self.b.target() as u8)
+        Color::Rgb(
+            self.r.target() as u8,
+            self.g.target() as u8,
+            self.b.target() as u8,
+        )
     }
 
     /// Returns `true` when the current color has reached the target.
@@ -245,11 +253,17 @@ mod tests {
         let color = at.blend(Color::Rgb(255, 0, 0), Color::Rgb(0, 0, 0));
         assert!(matches!(color, Color::Rgb(r, 0, 0) if r > 0 && r < 255));
         at.update(Duration::from_secs(10));
-        assert_eq!(at.blend(Color::Rgb(255, 0, 0), Color::Rgb(0, 0, 0)), Color::Rgb(255, 0, 0));
+        assert_eq!(
+            at.blend(Color::Rgb(255, 0, 0), Color::Rgb(0, 0, 0)),
+            Color::Rgb(255, 0, 0)
+        );
     }
 
     #[test]
     fn blend_black_to_white() {
-        assert_eq!(blend(Color::Rgb(0, 0, 0), Color::Rgb(255, 255, 255), 0.5), Color::Rgb(127, 127, 127));
+        assert_eq!(
+            blend(Color::Rgb(0, 0, 0), Color::Rgb(255, 255, 255), 0.5),
+            Color::Rgb(127, 127, 127)
+        );
     }
 }

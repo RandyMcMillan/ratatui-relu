@@ -10,7 +10,7 @@
 
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
-use crossterm::event::{KeyCode, MouseEvent, MouseEventKind, MouseButton};
+use crossterm::event::{KeyCode, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     Frame,
     buffer::Buffer,
@@ -374,11 +374,10 @@ impl StatefulWidget for MultiPanel {
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let header_height = (state.header.current() * self.header_height as f64).round() as u16;
         let footer_height = (state.footer.current() * self.footer_height as f64).round() as u16;
-        let left_width = ((state.left_sidebar.current()
-            * area.width as f64
-            * self.left_sidebar_width_fraction)
-            .round() as u16)
-            .max(self.left_sidebar_min_width);
+        let left_width =
+            ((state.left_sidebar.current() * area.width as f64 * self.left_sidebar_width_fraction)
+                .round() as u16)
+                .max(self.left_sidebar_min_width);
         let right_width = ((state.right_sidebar.current()
             * area.width as f64
             * self.right_sidebar_width_fraction)
@@ -521,7 +520,13 @@ fn help_text() -> Text<'static> {
 /// overlay.
 fn state_help_text(app: &MultiPanelApp) -> String {
     let bits = state_bits(app);
-    let panel = |bit: u8| if (bits >> bit) & 1 == 1 { "open" } else { "closed" };
+    let panel = |bit: u8| {
+        if (bits >> bit) & 1 == 1 {
+            "open"
+        } else {
+            "closed"
+        }
+    };
     let boost = |bit: u8| if (bits >> bit) & 1 == 1 { "on" } else { "off" };
     format!(
         "State bits: {:08b}\n\
@@ -611,10 +616,38 @@ impl StateCell {
 
     fn label(self, app: &MultiPanelApp) -> String {
         let (name, value) = match self {
-            StateCell::Header => ("Header", if app.state.header.target() > 0.5 { "open" } else { "closed" }),
-            StateCell::Left => ("Left", if app.state.left_sidebar.target() > 0.5 { "open" } else { "closed" }),
-            StateCell::Right => ("Right", if app.state.right_sidebar.target() > 0.5 { "open" } else { "closed" }),
-            StateCell::Footer => ("Footer", if app.state.footer.target() > 0.5 { "open" } else { "closed" }),
+            StateCell::Header => (
+                "Header",
+                if app.state.header.target() > 0.5 {
+                    "open"
+                } else {
+                    "closed"
+                },
+            ),
+            StateCell::Left => (
+                "Left",
+                if app.state.left_sidebar.target() > 0.5 {
+                    "open"
+                } else {
+                    "closed"
+                },
+            ),
+            StateCell::Right => (
+                "Right",
+                if app.state.right_sidebar.target() > 0.5 {
+                    "open"
+                } else {
+                    "closed"
+                },
+            ),
+            StateCell::Footer => (
+                "Footer",
+                if app.state.footer.target() > 0.5 {
+                    "open"
+                } else {
+                    "closed"
+                },
+            ),
             StateCell::TopBoost => ("Top boost", if app.top_boost { "on" } else { "off" }),
             StateCell::BottomBoost => ("Bottom boost", if app.bottom_boost { "on" } else { "off" }),
             StateCell::LeftBoost => ("Left boost", if app.left_boost { "on" } else { "off" }),
@@ -721,8 +754,8 @@ impl StatefulWidget for StateHelpTable {
             .constraints([Constraint::Length(1), Constraint::Min(4)])
             .split(area);
 
-        let bits_line = Paragraph::new(format!("State bits: {:08b}", self.bits))
-            .alignment(Alignment::Center);
+        let bits_line =
+            Paragraph::new(format!("State bits: {:08b}", self.bits)).alignment(Alignment::Center);
         Widget::render(bits_line, sections[0], buf);
 
         let rows = Layout::default()
@@ -994,10 +1027,8 @@ impl MultiPanelApp {
 
         if self.color_demo {
             if self.color_demo_transition.is_none() {
-                self.color_demo_transition = Some(ColorTransition::new(
-                    COLOR_DEMO_PALETTE[0],
-                    120.0,
-                ));
+                self.color_demo_transition =
+                    Some(ColorTransition::new(COLOR_DEMO_PALETTE[0], 120.0));
                 self.color_demo_transition
                     .as_mut()
                     .unwrap()
@@ -1367,15 +1398,15 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
             let table = StateHelpTable::new(_app);
             let table_state = _app.state_help_table_state.clone();
             move |_state, area, buf| {
-                let chunks = Layout::default()
+                let rows = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Min(0), Constraint::Length(16)])
+                    .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)])
                     .split(area);
                 let help = Paragraph::new(help_text()).alignment(Alignment::Left);
                 Widget::render(help, chunks[0], buf);
                 StatefulWidget::render(
                     table.clone(),
-                    chunks[1],
+                    toggle_chunks[1],
                     buf,
                     &mut table_state.borrow_mut(),
                 );

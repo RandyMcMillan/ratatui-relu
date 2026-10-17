@@ -63,8 +63,7 @@ fn run_app(
                     app.handle_key_event(key);
                     if matches!(
                         key.code,
-                        crossterm::event::KeyCode::Char('q')
-                            | crossterm::event::KeyCode::Esc
+                        crossterm::event::KeyCode::Char('q') | crossterm::event::KeyCode::Esc
                     ) {
                         break;
                     }

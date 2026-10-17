@@ -64,9 +64,15 @@ fn render_animated_chart(buf: &mut Buffer, area: Rect, time: f64) {
         .collect();
 
     let x_labels = vec![
-        Span::styled(format!("{}", window[0]), Style::default().add_modifier(Modifier::BOLD)),
+        Span::styled(
+            format!("{}", window[0]),
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
         Span::raw(format!("{}", f64::midpoint(window[0], window[1]))),
-        Span::styled(format!("{}", window[1]), Style::default().add_modifier(Modifier::BOLD)),
+        Span::styled(
+            format!("{}", window[1]),
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
     ];
 
     let datasets = vec![
@@ -141,12 +147,14 @@ fn render_barchart(buf: &mut Buffer, area: Rect) {
 }
 
 fn render_line_chart(buf: &mut Buffer, area: Rect) {
-    let datasets = vec![Dataset::default()
-        .name("Line from only 2 points".italic())
-        .marker(symbols::Marker::Braille)
-        .style(Style::default().fg(Color::Yellow))
-        .graph_type(GraphType::Line)
-        .data(&[(1., 1.), (4., 4.)])];
+    let datasets = vec![
+        Dataset::default()
+            .name("Line from only 2 points".italic())
+            .marker(symbols::Marker::Braille)
+            .style(Style::default().fg(Color::Yellow))
+            .graph_type(GraphType::Line)
+            .data(&[(1., 1.), (4., 4.)]),
+    ];
 
     let chart = Chart::new(datasets)
         .block(Block::bordered().title(Line::from("Line chart").cyan().bold().centered()))
