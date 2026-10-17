@@ -79,8 +79,9 @@ fn run_app(
                                 app.file_preview = content;
                             }
                         }
-                    } else if key.code == crossterm::event::KeyCode::Esc && app.show_help {
+                    } else if key.code == crossterm::event::KeyCode::Esc && (app.show_help || app.show_settings) {
                         app.show_help = false;
+                        app.show_settings = false;
                     } else if key.code == crossterm::event::KeyCode::Esc && app.main_active {
                         if app.main_boost {
                             app.main_boost = false;
@@ -88,12 +89,17 @@ fn run_app(
                             app.main_active = false;
                             // keep view state app.main_scroll = 0;
                         }
+                    } else if key.modifiers.contains(crossterm::event::KeyModifiers::SHIFT)
+                        && matches!(
+                            key.code,
+                            crossterm::event::KeyCode::Char('Q')
+                                | crossterm::event::KeyCode::Char('P')
+                        )
+                    {
+                        break;
                     } else {
                         app.handle_key_event(key);
-                        if matches!(
-                            key.code,
-                            crossterm::event::KeyCode::Char('q') // TODO Esc not exit app | crossterm::event::KeyCode::Esc
-                        ) {
+                        if matches!(key.code, crossterm::event::KeyCode::Esc) {
                             break;
                         }
                     }
