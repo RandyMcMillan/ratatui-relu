@@ -17,11 +17,11 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Clear, Paragraph, StatefulWidget, Widget},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph, StatefulWidget, Widget},
 };
 
 use crate::animation::{ColorTransition, Transition};
-use crate::mouse::{Button, ButtonState, ButtonTheme, is_mouse_over};
+use crate::mouse::{ButtonState, ButtonTheme, is_mouse_over};
 
 /// Mutable state for [`MultiPanel`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -737,13 +737,24 @@ impl StatefulWidget for StateHelpTable {
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(rows[row]);
             let cell_area = cols[col];
-            let theme = if *is_on {
-                ButtonTheme::GREEN
+            state.button_states[cell.index()].last_area = Some(cell_area);
+
+            let (bg, fg) = if *is_on {
+                (ButtonTheme::GREEN.background, ButtonTheme::GREEN.text)
             } else {
-                ButtonTheme::RED
+                (ButtonTheme::RED.background, ButtonTheme::RED.text)
             };
-            let button = Button::new(Line::from(label.as_str())).theme(theme);
-            StatefulWidget::render(button, cell_area, buf, &mut state.button_states[cell.index()]);
+            let block = Block::bordered()
+                .border_type(BorderType::Rounded)
+                .style(Style::default().bg(bg).fg(fg));
+            let inner = block.inner(cell_area);
+            Widget::render(block, cell_area, buf);
+            if inner.width > 0 && inner.height > 0 {
+                let p = Paragraph::new(Line::from(label.as_str()))
+                    .alignment(Alignment::Center)
+                    .style(Style::default().bg(bg).fg(fg));
+                Widget::render(p, inner, buf);
+            }
         }
     }
 }
