@@ -893,6 +893,9 @@ pub struct MultiPanelApp {
     /// Scroll offset for the main file view.
     #[serde(skip)]
     pub main_scroll: usize,
+    /// Boost flag for the main file view (full-screen).
+    #[serde(skip)]
+    pub main_boost: bool,
     /// Whether the full-screen help overlay is visible.
     #[serde(skip)]
     pub show_help: bool,
@@ -933,6 +936,7 @@ impl std::fmt::Debug for MultiPanelApp {
             .field("file_preview", &self.file_preview)
             .field("main_active", &self.main_active)
             .field("main_scroll", &self.main_scroll)
+            .field("main_boost", &self.main_boost)
             .finish()
     }
 }
@@ -1013,6 +1017,7 @@ impl MultiPanelApp {
             file_preview: String::new(),
             main_active: false,
             main_scroll: 0,
+            main_boost: false,
             show_help: false,
             color_demo: false,
             color_demo_transition: None,
@@ -1169,8 +1174,8 @@ impl MultiPanelApp {
                         self.main_scroll = self.main_scroll.saturating_sub(20);
                     }
                     KeyCode::Right => {
-                        // Boost the view: page down.
-                        self.main_scroll = self.main_scroll.saturating_add(20);
+                        // Boost the main view.
+                        self.main_boost = !self.main_boost;
                     }
                     _ => {}
                 }
@@ -1479,6 +1484,12 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     let selected_file = app.selected_file.clone();
     let main_active = app.main_active;
     let main_scroll = app.main_scroll;
+    let main_boost = app.main_boost;
+    let (left_fraction, right_fraction, header_height, footer_height) = if main_boost {
+        (0.0, 0.0, 0u16, 0u16)
+    } else {
+        (left_fraction, right_fraction, header_height, footer_height)
+    };
     let git_diff_text = app
         .git
         .as_ref()
