@@ -60,7 +60,28 @@ fn run_app(
         if event::poll(std::time::Duration::from_millis(16))? {
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    if app.show_terminal {
+                    if app.footer_terminal_focus {
+                        if key.code == crossterm::event::KeyCode::Esc {
+                            app.footer_terminal_focus = false;
+                        } else {
+                            let bytes = match key.code {
+                                crossterm::event::KeyCode::Char(c) => {
+                                    if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+                                        vec![c as u8 & 0x1f]
+                                    } else {
+                                        c.to_string().into_bytes()
+                                    }
+                                }
+                                crossterm::event::KeyCode::Enter => vec![b'\n'],
+                                crossterm::event::KeyCode::Backspace => vec![0x7f],
+                                crossterm::event::KeyCode::Tab => vec![b'\t'],
+                                _ => vec![],
+                            };
+                            if let Some(term) = &mut *app.terminal.borrow_mut() {
+                                term.write_input(&bytes);
+                            }
+                        }
+                    } else if app.show_terminal {
                         if key.code == crossterm::event::KeyCode::Esc {
                             app.show_terminal = false;
                         } else {

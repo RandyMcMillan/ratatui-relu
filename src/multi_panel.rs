@@ -910,7 +910,13 @@ pub struct MultiPanelApp {
     pub git: Option<GitState>,
     /// Embedded terminal state.
     #[serde(skip)]
-    pub terminal: Rc<RefCell<Option<TerminalState>>>, 
+    pub terminal: Rc<RefCell<Option<TerminalState>>>,
+    /// Footer terminal area (for mouse hit-testing).
+    #[serde(skip)]
+    pub footer_terminal_area: Rc<RefCell<Option<Rect>>>,
+    /// Whether the footer terminal has focus.
+    #[serde(skip)]
+    pub footer_terminal_focus: bool,
     /// Currently selected file path (loaded on Enter).
     #[serde(default)]
     pub selected_file: Option<std::path::PathBuf>,
@@ -983,6 +989,7 @@ impl std::fmt::Debug for MultiPanelApp {
             .field("keyboard_state", &"<KeyboardState>")
             .field("git", &self.git.is_some())
             .field("terminal", &self.terminal.borrow().is_some())
+            .field("footer_terminal_focus", &self.footer_terminal_focus)
             .field("selected_file", &self.selected_file)
             .field("file_preview", &self.file_preview)
             .field("main_active", &self.main_active)
@@ -1087,7 +1094,9 @@ impl MultiPanelApp {
             file_tree_data: FileTreeState::default(),
             file_view_scrolls: HashMap::new(),
             git: GitState::new(),
-            terminal: Rc::new(RefCell::new(TerminalState::new())), 
+            terminal: Rc::new(RefCell::new(TerminalState::new())),
+            footer_terminal_area: Rc::new(RefCell::new(None)),
+            footer_terminal_focus: false,
             selected_file: None,
             file_preview: String::new(),
             main_active: false,
@@ -1567,10 +1576,49 @@ impl MultiPanelApp {
                 }
             }
         }
+
+        // Footer terminal focus on click.
+        if let crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) = event.kind {
+            if let Some(area) = *self.footer_terminal_area.borrow() {
+                if area.x <= event.column
+                    && event.column < area.x + area.width
+                    && area.y <= event.row
+                    && event.row < area.y + area.height
+                {
+                    self.footer_terminal_focus = true;
+                } else {
+                    self.footer_terminal_focus = false;
+                }
+            }
+        }
     }
 
     /// Render the app into the given frame using the configured widget builder.
     pub fn render(&mut self, f: &mut Frame) {
+        if self.footer_terminal_focus {
+            // Render terminal in bottom 50% overlay.
+            let area = f.area();
+            let term_area = Rect::new(
+                area.x,
+                area.y + area.height / 2,
+                area.width,
+                area.height / 2,
+            );
+            Clear.render(term_area, f.buffer_mut());
+            if let Some(term) = &mut *self.terminal.borrow_mut() {
+                term.poll();
+                use tui_term::widget::PseudoTerminal;
+                let block = Block::default().borders(Borders::ALL).title("Terminal");
+                let inner = block.inner(term_area);
+                Widget::render(block, term_area, f.buffer_mut());
+                if inner.width > 0 && inner.height > 0 {
+                    let pseudo = PseudoTerminal::new(term.parser.screen());
+                    Widget::render(pseudo, inner, f.buffer_mut());
+                }
+            }
+            return;
+        }
+
         if self.show_settings {
             let area = f.area();
             Clear.render(area, f.buffer_mut());
@@ -1693,6 +1741,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         (left_fraction, right_fraction, header_height, footer_height)
     };
     let terminal_state = app.terminal.clone();
+    let footer_terminal_area = app.footer_terminal_area.clone();
     let git_diff_text = app
         .git
         .as_ref()
@@ -1835,11 +1884,15 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                 Clear.render(area, buf);
             }
         })
-        .footer_content(move |_state, area, buf| {
-            let halves = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                .split(area);
+        .footer_content({
+            let terminal_state = terminal_state.clone();
+            let footer_terminal_area = footer_terminal_area.clone();
+            move |_state, area, buf| {
+                let halves = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                    .split(area);
+                *footer_terminal_area.borrow_mut() = Some(halves[1]);
             Widget::render(
                 Paragraph::new(help).alignment(Alignment::Left),
                 halves[0],
@@ -1863,6 +1916,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                     buf,
                 );
             }
+        }
         })
         .header_color(color_demo_color.unwrap_or(Color::Blue))
         .left_color(color_demo_color.unwrap_or(Color::Green))
