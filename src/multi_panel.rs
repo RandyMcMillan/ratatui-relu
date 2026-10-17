@@ -1497,7 +1497,9 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                 }
             }
             out
-        });    let color_demo_color = app.color_demo_transition.as_ref().map(|ct| ct.current());
+        })
+        .filter(|s| !s.trim().is_empty());
+    let color_demo_color = app.color_demo_transition.as_ref().map(|ct| ct.current());
     let test_bits = app.test_mode.as_ref().map(|_| state_bits(app));
     let test_label = app.test_mode.as_ref().map(|t| {
         format!(
