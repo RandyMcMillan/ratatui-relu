@@ -728,9 +728,11 @@ impl StatefulWidget for StateHelpTable {
         let rows = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Ratio(1, 3),
-                Constraint::Ratio(1, 3),
-                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 5),
+                Constraint::Ratio(1, 5),
+                Constraint::Ratio(1, 5),
+                Constraint::Ratio(1, 5),
+                Constraint::Ratio(1, 5),
             ])
             .split(sections[1]);
 
@@ -750,13 +752,8 @@ impl StatefulWidget for StateHelpTable {
             }
         };
 
-        // Top row: header + top boost.
-        let top_cols = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(rows[0]);
-        render_cell(0, top_cols[0]); // Header
-        render_cell(1, top_cols[1]); // Top boost
+        render_cell(0, rows[0]); // Header
+        render_cell(1, rows[1]); // Top boost
 
         // Middle row: left and right options combined, with Grid in the center.
         let mid_cols = Layout::default()
@@ -768,20 +765,15 @@ impl StatefulWidget for StateHelpTable {
                 Constraint::Percentage(20),
                 Constraint::Percentage(20),
             ])
-            .split(rows[1]);
+            .split(rows[2]);
         render_cell(2, mid_cols[0]); // Left
         render_cell(5, mid_cols[1]); // Left boost
         render_cell(8, mid_cols[2]); // Grid
         render_cell(7, mid_cols[3]); // Right boost
         render_cell(4, mid_cols[4]); // Right
 
-        // Bottom row: footer + bottom boost.
-        let bot_cols = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(rows[2]);
-        render_cell(6, bot_cols[0]); // Footer
-        render_cell(3, bot_cols[1]); // Bottom boost
+        render_cell(3, rows[3]); // Bottom boost
+        render_cell(6, rows[4]); // Footer
     }
 }
 
@@ -1377,7 +1369,7 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
             move |_state, area, buf| {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Min(0), Constraint::Length(13)])
+                    .constraints([Constraint::Min(0), Constraint::Length(16)])
                     .split(area);
                 let help = Paragraph::new(help_text()).alignment(Alignment::Left);
                 Widget::render(help, chunks[0], buf);
