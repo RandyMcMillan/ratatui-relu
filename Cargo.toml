@@ -1,6 +1,6 @@
 [package]
 name = "ratatui-relu"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2024"
 repository = "https://github.com/RandyMcMillan/ratatui-relu"
 description = "Continuous, differentiable layout transitions for Ratatui"
