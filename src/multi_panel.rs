@@ -884,6 +884,12 @@ pub struct MultiPanelApp {
     /// Preview text of the selected file.
     #[serde(skip)]
     pub file_preview: String,
+    /// Whether the main file view is active (receives scroll keys).
+    #[serde(skip)]
+    pub main_active: bool,
+    /// Scroll offset for the main file view.
+    #[serde(skip)]
+    pub main_scroll: usize,
     /// Whether the full-screen help overlay is visible.
     #[serde(skip)]
     pub show_help: bool,
@@ -921,6 +927,8 @@ impl std::fmt::Debug for MultiPanelApp {
             .field("file_tree_state", &"<FileTreeState>")
             .field("selected_file", &self.selected_file)
             .field("file_preview", &self.file_preview)
+            .field("main_active", &self.main_active)
+            .field("main_scroll", &self.main_scroll)
             .finish()
     }
 }
@@ -995,6 +1003,8 @@ impl MultiPanelApp {
             ))),
             selected_file: None,
             file_preview: String::new(),
+            main_active: false,
+            main_scroll: 0,
             show_help: false,
             color_demo: false,
             color_demo_transition: None,
@@ -1126,19 +1136,77 @@ impl MultiPanelApp {
 
     /// Handle a key press (real or simulated).
     pub fn handle_key(&mut self, code: KeyCode) {
-        // When the left panel is open it is active: arrow keys navigate the
-        // file tree instead of driving panel transitions.
+        // When the left panel is open it is active.
         if self.state.left_sidebar.target() > 0.5
             && matches!(
                 code,
-                KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right
+                KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right | KeyCode::Enter
             )
         {
+            if self.main_active {
+                match code {
+                    KeyCode::Up => {
+                        self.main_scroll = self.main_scroll.saturating_sub(1);
+                    }
+                    KeyCode::Down => {
+                        self.main_scroll = self.main_scroll.saturating_add(1);
+                    }
+                    KeyCode::Left => {
+                        self.main_active = false;
+                    }
+                    KeyCode::Right => {
+                        self.main_scroll = self.main_scroll.saturating_add(5);
+                    }
+                    _ => {}
+                }
+                return;
+            }
+
+            // Right arrow on a selected file loads it and activates the main view.
+            if code == KeyCode::Right {
+                let selected = self.file_tree_state.borrow().selected_path().map(|p| p.to_path_buf());
+                if let Some(path) = selected.filter(|p| p.is_file()) {
+                    self.selected_file = Some(path.clone());
+                        let content = std::fs::read_to_string(&path)
+                            .unwrap_or_else(|e| format!("Error reading file: {}", e));
+                        self.file_preview = if content.len() > 100_000 {
+                            let mut t = content[..100_000].to_string();
+                            t.push_str("\n... (truncated)");
+                            t
+                        } else {
+                            content
+                        };
+                        self.main_active = true;
+                        self.main_scroll = 0;
+                        return;
+                }
+            }
+
+            if code == KeyCode::Enter {
+                if let Some(path) = self.file_tree_state.borrow().selected_path() {
+                    let path = path.to_path_buf();
+                    self.selected_file = Some(path.clone());
+                    let content = std::fs::read_to_string(&path)
+                        .unwrap_or_else(|e| format!("Error reading file: {}", e));
+                    self.file_preview = if content.len() > 100_000 {
+                        let mut t = content[..100_000].to_string();
+                        t.push_str("\n... (truncated)");
+                        t
+                    } else {
+                        content
+                    };
+                    self.main_active = true;
+                    self.main_scroll = 0;
+                }
+                return;
+            }
+
+            // Otherwise navigate the file tree.
             self.file_tree_state.borrow_mut().handle_key(code);
             return;
         }
 
-        // Load the selected file into the main panel on Enter.
+        // Load the selected file into the main panel on Enter (left closed).
         if matches!(code, KeyCode::Enter) {
             if let Some(path) = self.file_tree_state.borrow().selected_path() {
                 let path = path.to_path_buf();
@@ -1384,7 +1452,9 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     let file_tree_state = app.file_tree_state.clone();
     let chart_time = app.chart_time;
     let file_preview = app.file_preview.clone();
-    let selected_file = app.selected_file.clone();    let color_demo_color = app.color_demo_transition.as_ref().map(|ct| ct.current());
+    let selected_file = app.selected_file.clone();
+    let main_active = app.main_active;
+    let main_scroll = app.main_scroll;    let color_demo_color = app.color_demo_transition.as_ref().map(|ct| ct.current());
     let test_bits = app.test_mode.as_ref().map(|_| state_bits(app));
     let test_label = app.test_mode.as_ref().map(|t| {
         format!(
@@ -1430,12 +1500,18 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                     .and_then(|p| p.file_name())
                     .and_then(|n| n.to_str())
                     .unwrap_or("preview");
+                let title = if main_active {
+                    format!("{} [active]", title)
+                } else {
+                    title.to_string()
+                };
                 let block = ratatui::widgets::Block::bordered().title(title);
                 let inner = block.inner(area);
                 ratatui::widgets::Widget::render(block, area, buf);
                 if inner.width > 0 && inner.height > 0 {
                     let p = ratatui::widgets::Paragraph::new(file_preview.clone())
-                        .wrap(ratatui::widgets::Wrap { trim: false });
+                        .wrap(ratatui::widgets::Wrap { trim: false })
+                        .scroll((main_scroll as u16, 0));
                     ratatui::widgets::Widget::render(p, inner, buf);
                 }
             } else if chart_mode {
