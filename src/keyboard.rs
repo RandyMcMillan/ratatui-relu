@@ -283,15 +283,12 @@ impl StatefulWidget for KeyboardWidget {
         let mut idx = 0usize;
 
         for row in &self.rows {
-            let indent = match row.len() {
-                14 => 0u16,
-                13 => 2u16,
-                12 => 4u16,
-                11 => 6u16,
-                8 => 14u16,
-                7 => 16u16,
-                _ => 0u16,
-            };
+            let row_width: u16 = row
+                .iter()
+                .map(|k| if *k == ' ' { 15u16 } else { 5u16 })
+                .sum::<u16>()
+                .saturating_add((row.len() as u16).saturating_sub(1));
+            let indent = area.width.saturating_sub(row_width) / 2;
             let mut x = area.x + indent;
 
             for key in row {
