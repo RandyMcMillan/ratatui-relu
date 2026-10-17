@@ -1914,8 +1914,8 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .footer_color(Color::Yellow)
         .panel_height(1)
         .sidebar_width_fraction(0.25)
-        .left_sidebar_min_width(8)
-        .right_sidebar_min_width(8)
+        .left_sidebar_min_width(0)
+        .right_sidebar_min_width(0)
 }
 
 /// Encode panel targets and boost flags into an 8-bit state vector.
