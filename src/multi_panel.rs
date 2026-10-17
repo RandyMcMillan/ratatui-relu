@@ -495,16 +495,24 @@ fn help_text() -> Text<'static> {
     let mut lines = Vec::new();
 
     let rows = [
-        ("t / l / r / f", "toggle header / left / right / footer"),
+        ("t", "toggle header"),
+        ("l / a / q / p", "toggle left panel"),
+        ("r / u", "toggle right panel"),
+        ("f / h", "toggle footer"),
         ("Space", "toggle all panels"),
-        ("↑ / ↓", "close top / bottom and boost opposite"),
-        ("← / →", "close side and boost opposite"),
+        ("↑ / ↓", "boost panels (left closed) / file nav (left open)"),
+        ("← / →", "boost panels (left closed) / file nav (left open)"),
+        ("Enter", "load selected file into main view"),
+        ("Right", "activate main file view"),
+        ("Esc", "de-boost / deactivate / close overlays"),
+        ("n", "toggle line numbers"),
+        ("e", "open selected file in $EDITOR"),
+        ("\\", "cycle settings / help"),
+        ("Shift+Q / Shift+P", "quit"),
         ("Shift+A", "hide / show inner grid"),
         ("Shift+T", "start / stop automated test matrix"),
         ("Shift+C", "toggle color transition demo"),
         ("Shift+M", "toggle chart dashboard"),
-        ("\\", "toggle this help overlay"),
-        ("q / Esc", "quit"),
     ];
 
     lines.push(Line::default());
@@ -1747,7 +1755,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
 /// The built-in settings widget builder. Renders settings inside a
 /// multi-panel layout matching the help overlay.
 pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
-    let left_text = "\n\n    Line numbers: n\n    Boost view: \\ (right arrow)\n    Open editor: e";
+    let left_text = "\n\n    l/a/q/p: left panel\n    r/u: right panel\n    f/h: footer\n    t: header\n    Space: all panels\n    n: line numbers\n    e: open in editor";
     let right_text = "\n\n    Press \\ again for help\n    Esc/q to close";
     let line_width = |text: &str| {
         text.lines()
