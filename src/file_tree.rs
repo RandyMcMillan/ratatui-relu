@@ -127,6 +127,13 @@ impl FileTreeState {
         self.rebuild();
     }
 
+    pub fn apply_persisted_state(&mut self, data: &Self) {
+        self.collapsed = data.collapsed.clone();
+        self.selected = data.selected.clone();
+        self.scroll = data.scroll;
+        self.rebuild();
+    }
+
     pub fn snapshot(&self) -> Self {
         Self {
             paths: self.paths.clone(),

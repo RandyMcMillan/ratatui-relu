@@ -1018,14 +1018,14 @@ impl MultiPanelApp {
         if let Some(p) = path
             && let Some(mut app) = load_app_from_path(&p)
         {
-            if app.file_tree_data.paths().is_empty() && app.file_tree_state.borrow().paths().is_empty() {
+            // Always rescan the working directory so the tree reflects new/removed files.
+            let fresh = default_file_tree_paths();
+            app.file_tree_state.borrow_mut().set_paths(fresh);
+            // Restore persisted collapse/selection/scroll state onto the fresh tree.
+            if !app.file_tree_data.paths().is_empty() {
                 app.file_tree_state
                     .borrow_mut()
-                    .set_paths(default_file_tree_paths());
-            } else if !app.file_tree_data.paths().is_empty() {
-                app.file_tree_state
-                    .borrow_mut()
-                    .apply_persisted(&app.file_tree_data);
+                    .apply_persisted_state(&app.file_tree_data);
             }
             if let Some(path) = app.selected_file.clone() {
                 if let Ok(content) = std::fs::read_to_string(&path) {
