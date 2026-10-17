@@ -65,7 +65,8 @@ impl FileTreeState {
     pub fn set_git_status(&mut self, items: Vec<StatusItem>) {
         self.git_status_map.clear();
         for item in items {
-            self.git_status_map.insert(PathBuf::from(item.path), item.status);
+            self.git_status_map
+                .insert(PathBuf::from(item.path), item.status);
         }
     }
 
@@ -385,10 +386,7 @@ mod tests {
 
     #[test]
     fn renders_nested_and_navigates() {
-        let paths = vec![
-            PathBuf::from("a/b/c.txt"),
-            PathBuf::from("a/d.txt"),
-        ];
+        let paths = vec![PathBuf::from("a/b/c.txt"), PathBuf::from("a/d.txt")];
         let mut state = FileTreeState::from_paths(paths);
         let widget = FileTreeWidget::new().show_icons(true);
         let mut buf = Buffer::empty(Rect::new(0, 0, 40, 10));
@@ -407,10 +405,7 @@ mod tests {
 
     #[test]
     fn collapse_hides_children() {
-        let paths = vec![
-            PathBuf::from("a/b/c.txt"),
-            PathBuf::from("a/d.txt"),
-        ];
+        let paths = vec![PathBuf::from("a/b/c.txt"), PathBuf::from("a/d.txt")];
         let mut state = FileTreeState::from_paths(paths);
         // select first dir? root a is index 0; collapse via Left? Actually Left collapses if expanded.
         // Move right/down? Just call handle_key Left on root
