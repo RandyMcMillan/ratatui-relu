@@ -1449,6 +1449,29 @@ impl MultiPanelApp {
     /// (arrow keys used by test mode) should keep using [`Self::handle_key`].
     pub fn handle_key_event(&mut self, key: crossterm::event::KeyEvent) {
         use crossterm::event::KeyModifiers;
+        // Help/settings overlays have their own key handling.
+        if self.show_help || self.show_settings {
+            match key.code {
+                crossterm::event::KeyCode::Esc | crossterm::event::KeyCode::Char('q') => {
+                    self.show_help = false;
+                    self.show_settings = false;
+                }
+                crossterm::event::KeyCode::Char('\\') => {
+                    if self.show_help {
+                        self.show_help = false;
+                        self.show_settings = true;
+                    } else {
+                        self.show_settings = false;
+                        self.show_help = true;
+                    }
+                }
+                crossterm::event::KeyCode::Char('n') => {
+                    self.line_numbers = !self.line_numbers;
+                }
+                _ => {}
+            }
+            return;
+        }
         match (key.code, key.modifiers) {
             // Grid Mode
             (KeyCode::Char('g'), m) if m.contains(KeyModifiers::SHIFT) => {
@@ -1889,19 +1912,24 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         })
         .main_content({
             let keyboard_state = _app.keyboard_state.clone();
+            let table = StateHelpTable::new(_app);
+            let table_state = _app.state_help_table_state.clone();
             move |_state, area, buf| {
                 use ratatui::layout::{Constraint, Direction, Layout};
                 use ratatui::widgets::StatefulWidget;
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Length(3), Constraint::Min(0)])
+                    .constraints([Constraint::Length(1), Constraint::Min(0),Constraint::Min(0), Constraint::Length(1)])
                     .split(area);
                 let output = keyboard_state.borrow().last_output.clone();
                 let p = Paragraph::new(output).alignment(Alignment::Center);
-                Widget::render(p, chunks[0], buf);
+                Widget::render(p.clone(), chunks[0], buf); // first in
+                Widget::render(p, chunks[1], buf); // first in
                 let widget = KeyboardWidget::default();
                 let mut st = keyboard_state.borrow_mut();
-                StatefulWidget::render(widget, chunks[1], buf, &mut st);
+                StatefulWidget::render(table.clone(), chunks[1], buf, &mut table_state.borrow_mut()); // display toggle controls 25% height
+                StatefulWidget::render(widget, chunks[2], buf, &mut st); // display keyboard on
+                                                                         // bottom
             }
         })        .footer_content(|_state, area, buf| {
             let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
