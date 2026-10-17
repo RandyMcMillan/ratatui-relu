@@ -121,12 +121,7 @@ fn run_app(
                         break;
                     } else {
                         app.handle_key_event(key);
-                        if matches!(key.code, crossterm::event::KeyCode::Esc)
-                            && !app.show_help
-                            && !app.show_settings
-                        {
-                            break;
-                        }
+                        // Esc does not quit the app; it only closes overlays/deactivates views.
                     }
                     // Repaint immediately after a key press so state changes
                     // are visible right away.
