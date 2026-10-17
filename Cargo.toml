@@ -14,6 +14,9 @@ dirs = "5.0"
 filetreelist = "0.6.0"
 labtui-asyncgit = "0.28.3"
 ratatui = "0.30.2"
+tui-term = { version = "0.3.4", features = ["unstable"] }
+portable-pty = "0.9"
+vt100 = "0.16"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 

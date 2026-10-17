@@ -24,7 +24,9 @@ use crate::animation::{ColorTransition, Transition};
 use crate::file_tree::{FileTreeState, FileTreeWidget};
 use crate::git::GitState;
 use crate::keyboard::{KeyboardState, KeyboardWidget};
-use crate::mouse::{ButtonState, is_mouse_over};/// Mutable state for [`MultiPanel`].
+use crate::mouse::{ButtonState, is_mouse_over};
+use crate::terminal::TerminalState;
+/// Mutable state for [`MultiPanel`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MultiPanelState {
     pub header: Transition,
@@ -906,6 +908,9 @@ pub struct MultiPanelApp {
     /// Async git state (if inside a git repo).
     #[serde(skip)]
     pub git: Option<GitState>,
+    /// Embedded terminal state.
+    #[serde(skip)]
+    pub terminal: Option<TerminalState>,
     /// Currently selected file path (loaded on Enter).
     #[serde(default)]
     pub selected_file: Option<std::path::PathBuf>,
@@ -930,6 +935,9 @@ pub struct MultiPanelApp {
     /// Whether the full-screen settings overlay is visible.
     #[serde(skip)]
     pub show_settings: bool,
+    /// Whether the terminal view is visible.
+    #[serde(skip)]
+    pub show_terminal: bool,
     /// Whether the color-transition demo is running.
     #[serde(skip)]
     pub color_demo: bool,
@@ -965,10 +973,12 @@ impl std::fmt::Debug for MultiPanelApp {
             .field("test_mode", &self.test_mode)
             .field("config", &"<MultiPanelAppConfig>")
             .field("show_settings", &self.show_settings)
+            .field("show_terminal", &self.show_terminal)
             .field("file_tree_state", &"<FileTreeState>")
             .field("file_tree_data", &"<FileTreeState>")
             .field("keyboard_state", &"<KeyboardState>")
             .field("git", &self.git.is_some())
+            .field("terminal", &self.terminal.is_some())
             .field("selected_file", &self.selected_file)
             .field("file_preview", &self.file_preview)
             .field("main_active", &self.main_active)
@@ -1041,6 +1051,9 @@ impl MultiPanelApp {
             if app.git.is_none() {
                 app.git = GitState::new();
             }
+            if app.terminal.is_none() {
+                app.terminal = TerminalState::new();
+            }
             if app.keyboard_state.borrow().keys.is_empty() {
                 *app.keyboard_state.borrow_mut() = crate::keyboard::KeyboardState::new();
             }
@@ -1070,6 +1083,7 @@ impl MultiPanelApp {
             file_tree_data: FileTreeState::default(),
             file_view_scrolls: HashMap::new(),
             git: GitState::new(),
+            terminal: TerminalState::new(),
             selected_file: None,
             file_preview: String::new(),
             main_active: false,
@@ -1078,6 +1092,7 @@ impl MultiPanelApp {
             line_numbers: true,
             show_help: false,
             show_settings: false,
+            show_terminal: false,
             color_demo: false,
             color_demo_transition: None,
             color_demo_timer: Duration::ZERO,
@@ -1132,6 +1147,9 @@ impl MultiPanelApp {
             git.poll();
             let items = git.status_items.clone();
             self.file_tree_state.borrow_mut().set_git_status(items);
+        }
+        if let Some(term) = &mut self.terminal {
+            term.poll();
         }
         self.file_tree_data = self.file_tree_state.borrow().snapshot();
 
@@ -1460,6 +1478,7 @@ impl MultiPanelApp {
                 crossterm::event::KeyCode::Esc | crossterm::event::KeyCode::Char('q') => {
                     self.show_help = false;
                     self.show_settings = false;
+                    self.show_terminal = false;
                 }
                 crossterm::event::KeyCode::Char('\\') => {
                     if self.show_help {
@@ -1540,6 +1559,15 @@ impl MultiPanelApp {
             let mut settings_state = MultiPanelState::open(8.0);
             let widget = settings_widget_builder(self);
             f.render_stateful_widget(widget, area, &mut settings_state);
+        } else if self.show_terminal {
+            let area = f.area();
+            Clear.render(area, f.buffer_mut());
+            if let Some(term) = &mut self.terminal {
+                term.poll();
+                use tui_term::widget::PseudoTerminal;
+                let pseudo = PseudoTerminal::new(term.parser.screen());
+                Widget::render(pseudo, area, f.buffer_mut());
+            }
         } else if self.show_help {
             let area = f.area();
             Clear.render(area, f.buffer_mut());
