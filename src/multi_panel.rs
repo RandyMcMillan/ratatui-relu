@@ -908,6 +908,9 @@ pub struct MultiPanelApp {
     /// Boost flag for the main file view (full-screen).
     #[serde(skip)]
     pub main_boost: bool,
+    /// Show line numbers in the file view.
+    #[serde(default = "default_line_numbers")]
+    pub line_numbers: bool,
     /// Whether the full-screen help overlay is visible.
     #[serde(skip)]
     pub show_help: bool,
@@ -950,6 +953,7 @@ impl std::fmt::Debug for MultiPanelApp {
             .field("main_active", &self.main_active)
             .field("main_scroll", &self.main_scroll)
             .field("main_boost", &self.main_boost)
+            .field("line_numbers", &self.line_numbers)
             .finish()
     }
 }
@@ -969,6 +973,10 @@ impl Default for MultiPanelApp {
 }
 
 const fn default_show_grid() -> bool {
+    true
+}
+
+const fn default_line_numbers() -> bool {
     true
 }
 
@@ -1043,6 +1051,7 @@ impl MultiPanelApp {
             main_active: false,
             main_scroll: 0,
             main_boost: false,
+            line_numbers: true,
             show_help: false,
             color_demo: false,
             color_demo_transition: None,
@@ -1339,6 +1348,7 @@ impl MultiPanelApp {
             // Chart mode
             KeyCode::Char('M') => self.chart_mode = !self.chart_mode,
             KeyCode::Char(' ') => self.state.toggle_all(),
+            KeyCode::Char('n') => self.line_numbers = !self.line_numbers,
             // File tree navigation in the left panel.
             KeyCode::Char('j') => {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Down);
@@ -1543,6 +1553,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     let selected_file = app.selected_file.clone();
     let main_scroll = app.main_scroll;
     let main_boost = app.main_boost;
+    let line_numbers = app.line_numbers;
     let (left_fraction, right_fraction, header_height, footer_height) = if main_boost {
         (0.0, 0.0, 0u16, 0u16)
     } else {
@@ -1619,11 +1630,21 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                             .to_string()
                     })
                     .unwrap_or_else(|| "diff".to_string());
+                let display = if line_numbers {
+                    diff_text
+                        .lines()
+                        .enumerate()
+                        .map(|(i, l)| format!("{:>4}  {}", i + 1, l))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                } else {
+                    diff_text.clone()
+                };
                 let block = ratatui::widgets::Block::bordered().title(title);
                 let inner = block.inner(area);
                 ratatui::widgets::Widget::render(block, area, buf);
                 if inner.width > 0 && inner.height > 0 {
-                    let p = ratatui::widgets::Paragraph::new(diff_text.clone())
+                    let p = ratatui::widgets::Paragraph::new(display)
                         .wrap(ratatui::widgets::Wrap { trim: false })
                         .scroll((main_scroll as u16, 0));
                     ratatui::widgets::Widget::render(p, inner, buf);
@@ -1638,11 +1659,21 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                             .to_string()
                     })
                     .unwrap_or_else(|| "preview".to_string());
+                let display = if line_numbers {
+                    file_preview
+                        .lines()
+                        .enumerate()
+                        .map(|(i, l)| format!("{:>4}  {}", i + 1, l))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                } else {
+                    file_preview.clone()
+                };
                 let block = ratatui::widgets::Block::bordered().title(title);
                 let inner = block.inner(area);
                 ratatui::widgets::Widget::render(block, area, buf);
                 if inner.width > 0 && inner.height > 0 {
-                    let p = ratatui::widgets::Paragraph::new(file_preview.clone())
+                    let p = ratatui::widgets::Paragraph::new(display)
                         .wrap(ratatui::widgets::Wrap { trim: false })
                         .scroll((main_scroll as u16, 0));
                     ratatui::widgets::Widget::render(p, inner, buf);
