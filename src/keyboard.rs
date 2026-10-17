@@ -232,7 +232,7 @@ impl StatefulWidget for KeyboardWidget {
 
             for key in row {
                 let label = if *key == ' ' { "Space".to_string() } else { key.to_string() };
-                let w: u16 = if *key == ' ' { 9 } else { 3 };
+                let w: u16 = 5;
                 let h: u16 = 3;
                 let btn_area = Rect::new(x, y, w, h);
 
