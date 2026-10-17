@@ -1319,6 +1319,7 @@ impl MultiPanelApp {
             ('t', 0),
             ('l', 1),
             ('a', 1),
+            ('q', 1),
             ('r', 2),
             ('u', 2),
             ('f', 3),
@@ -1377,7 +1378,6 @@ impl MultiPanelApp {
                     self.show_settings = true;
                 }
             }
-            KeyCode::Char('q') => self.show_help = !self.show_help,
             KeyCode::Up => {
                 let top_closed = self.state.header.target() < 0.5;
                 let bottom_open = self.state.footer.target() > 0.5;
