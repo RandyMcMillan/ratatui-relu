@@ -78,6 +78,9 @@ fn run_app(
                                 app.file_preview = content;
                             }
                         }
+                    } else if key.code == crossterm::event::KeyCode::Esc && app.main_active {
+                        app.main_active = false;
+                        app.main_scroll = 0;
                     } else {
                         app.handle_key_event(key);
                         if matches!(
