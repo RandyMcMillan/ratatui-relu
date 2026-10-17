@@ -1166,10 +1166,11 @@ impl MultiPanelApp {
                         self.main_scroll = self.main_scroll.saturating_add(1);
                     }
                     KeyCode::Left => {
-                        self.main_active = false;
+                        self.main_scroll = self.main_scroll.saturating_sub(20);
                     }
                     KeyCode::Right => {
-                        self.main_scroll = self.main_scroll.saturating_add(5);
+                        // Boost the view: page down.
+                        self.main_scroll = self.main_scroll.saturating_add(20);
                     }
                     _ => {}
                 }
