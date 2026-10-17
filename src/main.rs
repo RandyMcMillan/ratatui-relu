@@ -60,12 +60,32 @@ fn run_app(
         if event::poll(std::time::Duration::from_millis(16))? {
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    app.handle_key_event(key);
-                    if matches!(
-                        key.code,
-                        crossterm::event::KeyCode::Char('q') | crossterm::event::KeyCode::Esc
-                    ) {
-                        break;
+                    if key.code == crossterm::event::KeyCode::Char('e') {
+                        if let Some(path) = app.selected_file.clone() {
+                            // Suspend the TUI and launch the user's editor.
+                            disable_mouse_capture()?;
+                            disable_raw_mode()?;
+                            terminal.backend_mut().execute(LeaveAlternateScreen)?;
+                            let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+                            let _ = std::process::Command::new(&editor).arg(&path).status();
+                            // Restore the TUI.
+                            stdout().execute(EnterAlternateScreen)?;
+                            enable_raw_mode()?;
+                            enable_mouse_capture()?;
+                            terminal.clear()?;
+                            // Reload the preview after editing.
+                            if let Ok(content) = std::fs::read_to_string(&path) {
+                                app.file_preview = content;
+                            }
+                        }
+                    } else {
+                        app.handle_key_event(key);
+                        if matches!(
+                            key.code,
+                            crossterm::event::KeyCode::Char('q') | crossterm::event::KeyCode::Esc
+                        ) {
+                            break;
+                        }
                     }
                     // Repaint immediately after a key press so state changes
                     // are visible right away.
