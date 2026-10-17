@@ -477,7 +477,13 @@ fn render_panel(
 // ============================================================
 
 /// Keys simulated during test mode.
-pub const TEST_KEYS: [KeyCode; 4] = [KeyCode::Left, KeyCode::Right, KeyCode::Up, KeyCode::Down];
+pub const TEST_KEYS: [KeyCode; 5] = [
+    KeyCode::Left,
+    KeyCode::Right,
+    KeyCode::Up,
+    KeyCode::Down,
+    KeyCode::Char(' '),
+];
 
 fn help_text() -> Text<'static> {
     let mut lines = Vec::new();
@@ -781,7 +787,7 @@ impl MultiPanelApp {
         if let Some(err) = verify_transition_matrix() {
             eprintln!("Transition matrix mismatch: {}", err);
         } else {
-            //eprintln!("Transition matrix verified: all 1024 state-key cases pass");
+            //eprintln!("Transition matrix verified: all 1280 state-key cases pass");
         }
         let start = state_bits(self);
         self.test_mode = Some(TestMode {
@@ -1142,7 +1148,7 @@ pub fn set_state_bits(app: &mut MultiPanelApp, bits: u8) {
     app.right_boost = (bits >> BIT_RIGHT_BOOST) & 1 == 1;
 }
 
-/// Transition matrix for arrow keys over the full state space.
+/// Transition matrix for arrow keys and Space over the full state space.
 ///
 /// State is an 8-bit vector: lower 4 bits are panel open/closed, upper 4 bits
 /// are boost flags (top, bottom, left, right).
@@ -1193,6 +1199,7 @@ pub fn transition_matrix(state: u8, key: crossterm::event::KeyCode) -> u8 {
                 (h, 0, r, f, top_b, bot_b, left_b, right_b)
             }
         }
+        KeyCode::Char(' ') => (h ^ 1, l ^ 1, r ^ 1, f ^ 1, top_b, bot_b, left_b, right_b),
         _ => (h, l, r, f, top_b, bot_b, left_b, right_b),
     };
 
@@ -1206,7 +1213,7 @@ pub fn transition_matrix(state: u8, key: crossterm::event::KeyCode) -> u8 {
         | (nright_b << BIT_RIGHT_BOOST)
 }
 
-/// Run the full 256×4 transition matrix and return the first mismatch, if any.
+/// Run the full 256×5 transition matrix and return the first mismatch, if any.
 pub fn verify_transition_matrix() -> Option<String> {
     for state in 0..=255u8 {
         for key in TEST_KEYS {
