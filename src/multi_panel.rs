@@ -454,12 +454,17 @@ fn render_panel(
     state: &mut MultiPanelState,
     content: PanelContentRef<'_>,
 ) {
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(color));
-    let inner = block.inner(area);
-    Widget::render(block, area, buf);
+    let inner = if title.is_empty() {
+        area
+    } else {
+        let block = Block::default()
+            .title(title)
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(color));
+        let inner = block.inner(area);
+        Widget::render(block, area, buf);
+        inner
+    };
 
     if inner.width > 0 && inner.height > 0 {
         match content {
@@ -1486,7 +1491,6 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     let chart_time = app.chart_time;
     let file_preview = app.file_preview.clone();
     let selected_file = app.selected_file.clone();
-    let main_active = app.main_active;
     let main_scroll = app.main_scroll;
     let main_boost = app.main_boost;
     let (left_fraction, right_fraction, header_height, footer_height) = if main_boost {
@@ -1531,7 +1535,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         .header_title("Header")
         .left_title("Left")
         .right_title("Right")
-        .main_title("Main")
+        .main_title("")
         .footer_title("Footer")
         .header_content(move |_state, area, buf| {
             let top = Rect::new(area.x, area.y, area.width, 1.min(area.height));
@@ -1561,11 +1565,6 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                     .and_then(|p| p.file_name())
                     .and_then(|n| n.to_str())
                     .unwrap_or("diff");
-                let title = if main_active {
-                    format!("{} (diff) [active]", title)
-                } else {
-                    format!("{} (diff)", title)
-                };
                 let block = ratatui::widgets::Block::bordered().title(title);
                 let inner = block.inner(area);
                 ratatui::widgets::Widget::render(block, area, buf);
@@ -1581,11 +1580,6 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                     .and_then(|p| p.file_name())
                     .and_then(|n| n.to_str())
                     .unwrap_or("preview");
-                let title = if main_active {
-                    format!("{} [active]", title)
-                } else {
-                    title.to_string()
-                };
                 let block = ratatui::widgets::Block::bordered().title(title);
                 let inner = block.inner(area);
                 ratatui::widgets::Widget::render(block, area, buf);
