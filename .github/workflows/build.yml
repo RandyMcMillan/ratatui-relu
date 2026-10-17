@@ -6,18 +6,39 @@ on:
   pull_request:
     branches: [master, main]
   workflow_dispatch:
+    inputs:
+      os:
+        description: Runner OS
+        required: true
+        type: choice
+        options:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        default: ubuntu-latest
+      rust-version:
+        description: Rust toolchain version
+        required: true
+        type: string
+        default: stable
+      features:
+        description: Cargo features to build (optional)
+        required: false
+        type: string
+        default: ""
 
 jobs:
   cache-factory:
     name: Cache Factory
     uses: ./.github/workflows/cache-factory.yml
     with:
-      rust-version: stable
+      os: ${{ inputs.os || 'ubuntu-latest' }}
+      rust-version: ${{ inputs.rust-version || 'stable' }}
 
   build:
     name: Build and test
     needs: cache-factory
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.os || 'ubuntu-latest' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,7 +46,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
+          toolchain: ${{ inputs.rust-version || 'stable' }}
 
       - name: Restore cargo cache
         uses: Swatinem/rust-cache@v2
@@ -33,7 +54,7 @@ jobs:
           shared-key: "ratatui-relu"
 
       - name: Build
-        run: cargo build --verbose
+        run: cargo build --verbose ${{ inputs.features && format('--features {0}', inputs.features) || '' }}
 
       - name: Test
-        run: cargo test --verbose
+        run: cargo test --verbose ${{ inputs.features && format('--features {0}', inputs.features) || '' }}
