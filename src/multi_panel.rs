@@ -914,6 +914,9 @@ pub struct MultiPanelApp {
     /// Whether the full-screen help overlay is visible.
     #[serde(skip)]
     pub show_help: bool,
+    /// Whether the full-screen settings overlay is visible.
+    #[serde(skip)]
+    pub show_settings: bool,
     /// Whether the color-transition demo is running.
     #[serde(skip)]
     pub color_demo: bool,
@@ -945,6 +948,7 @@ impl std::fmt::Debug for MultiPanelApp {
             .field("bottom_boost", &self.bottom_boost)
             .field("test_mode", &self.test_mode)
             .field("config", &"<MultiPanelAppConfig>")
+            .field("show_settings", &self.show_settings)
             .field("file_tree_state", &"<FileTreeState>")
             .field("file_tree_data", &"<FileTreeState>")
             .field("git", &self.git.is_some())
@@ -1053,6 +1057,7 @@ impl MultiPanelApp {
             main_boost: false,
             line_numbers: true,
             show_help: false,
+            show_settings: false,
             color_demo: false,
             color_demo_transition: None,
             color_demo_timer: Duration::ZERO,
@@ -1362,7 +1367,17 @@ impl MultiPanelApp {
             KeyCode::Char('L') => {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Right);
             } // right handed                 // left handed
-            KeyCode::Char('\\') | KeyCode::Char('q') => self.show_help = !self.show_help,
+            KeyCode::Char('\\') => {
+                if self.show_help {
+                    self.show_help = false;
+                } else if self.show_settings {
+                    self.show_settings = false;
+                    self.show_help = true;
+                } else {
+                    self.show_settings = true;
+                }
+            }
+            KeyCode::Char('q') => self.show_help = !self.show_help,
             KeyCode::Up => {
                 let top_closed = self.state.header.target() < 0.5;
                 let bottom_open = self.state.footer.target() > 0.5;
@@ -1453,7 +1468,13 @@ impl MultiPanelApp {
 
     /// Render the app into the given frame using the configured widget builder.
     pub fn render(&mut self, f: &mut Frame) {
-        if self.show_help {
+        if self.show_settings {
+            let area = f.area();
+            Clear.render(area, f.buffer_mut());
+            let mut settings_state = MultiPanelState::open(8.0);
+            let widget = settings_widget_builder(self);
+            f.render_stateful_widget(widget, area, &mut settings_state);
+        } else if self.show_help {
             let area = f.area();
             Clear.render(area, f.buffer_mut());
             let mut help_state = MultiPanelState::open(8.0);
@@ -1720,6 +1741,54 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         .footer_height(footer_height)
         .left_sidebar_width_fraction(left_fraction)
         .right_sidebar_width_fraction(right_fraction)
+}
+
+/// The built-in settings widget builder. Renders settings inside a
+/// multi-panel layout matching the help overlay.
+pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
+    let left_text = "\n\n    Line numbers: n\n    Boost view: \\ (right arrow)\n    Open editor: e";
+    let right_text = "\n\n    Press \\ again for help\n    Esc/q to close";
+    let line_width = |text: &str| {
+        text.lines()
+            .map(|line| line.len() as u16)
+            .max()
+            .unwrap_or(0)
+            + 5
+    };
+
+    MultiPanel::new()
+        .header_title("Settings")
+        .left_title("Options")
+        .right_title("Info")
+        .main_title("")
+        .footer_title("Press \\ or q/Esc to dismiss")
+        .header_content(|_state, area, buf| {
+            let p = Paragraph::new("ratatui-relu settings")
+                .alignment(Alignment::Center)
+                .fg(Color::Cyan);
+            Widget::render(p, area, buf);
+        })
+        .left_content(move |_state, area, buf| {
+            let p = Paragraph::new(left_text).alignment(Alignment::Left);
+            Widget::render(p, area, buf);
+        })
+        .right_content(move |_state, area, buf| {
+            let p = Paragraph::new(right_text).alignment(Alignment::Left);
+            Widget::render(p, area, buf);
+        })
+        .footer_content(|_state, area, buf| {
+            let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
+            Widget::render(p, area, buf);
+        })
+        .header_color(Color::Cyan)
+        .left_color(Color::Green)
+        .right_color(Color::Magenta)
+        .main_color(Color::Reset)
+        .footer_color(Color::Yellow)
+        .panel_height(3)
+        .sidebar_width_fraction(0.2)
+        .left_sidebar_min_width(line_width(left_text))
+        .right_sidebar_min_width(line_width(right_text))
 }
 
 /// The built-in help widget builder. Renders the help text inside a
