@@ -95,31 +95,23 @@ impl<'a> Button<'a> {
 
 impl Widget for Button<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let (background, text, shadow, highlight) = self.colors();
+        use ratatui::widgets::{Block, BorderType, Borders};
+        let (background, text, _shadow, highlight) = self.colors();
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::new().fg(highlight).bg(background));
+        let inner = block.inner(area);
         buf.set_style(area, Style::new().bg(background).fg(text));
-
-        if area.height > 2 {
-            buf.set_string(
-                area.x,
-                area.y,
-                "▔".repeat(area.width as usize),
-                Style::new().fg(highlight).bg(background),
+        ratatui::widgets::Widget::render(block, area, buf);
+        if inner.width > 0 && inner.height > 0 {
+            buf.set_line(
+                inner.x + (inner.width.saturating_sub(self.label.width() as u16)) / 2,
+                inner.y + (inner.height.saturating_sub(1)) / 2,
+                &self.label,
+                inner.width,
             );
         }
-        if area.height > 1 {
-            buf.set_string(
-                area.x,
-                area.y + area.height - 1,
-                "▁".repeat(area.width as usize),
-                Style::new().fg(shadow).bg(background),
-            );
-        }
-        buf.set_line(
-            area.x + (area.width.saturating_sub(self.label.width() as u16)) / 2,
-            area.y + (area.height.saturating_sub(1)) / 2,
-            &self.label,
-            area.width,
-        );
     }
 }
 
