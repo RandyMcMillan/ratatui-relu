@@ -288,7 +288,8 @@ impl StatefulWidget for KeyboardWidget {
                 13 => 2u16,
                 12 => 4u16,
                 11 => 6u16,
-                7 => 18u16,
+                8 => 14u16,
+                7 => 16u16,
                 _ => 0u16,
             };
             let mut x = area.x + indent;
@@ -312,7 +313,7 @@ impl StatefulWidget for KeyboardWidget {
                     }
                     _ => key.to_string(),
                 };
-                let w: u16 = 5;
+                let w: u16 = if *key == ' ' { 15 } else { 5 };
                 let h: u16 = 3;
                 let btn_area = Rect::new(x, y, w, h);
 
