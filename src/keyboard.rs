@@ -12,14 +12,31 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use crate::mouse::is_mouse_over;
 
 /// Rows of keys in the keyboard graphic.
-const KEY_ROWS: &[&[char]] = &[
-    &['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\x08'],
-    &['\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']', '\\'],
-    &['\x14', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', '\'', '\n'],
-    &['\x1e', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/', '\x1f'],
-    &['\x11', ' ', '\x12', '\x1b', '\x1c', '\x1d', '\x1a'],
-];
-// sentinels: \x08 Backspace, \t Tab, \x14 Caps, \n Enter, \x1e Shift, \x11 Ctrl, \x12 Alt, \x1b Esc, \x1c Left, \x1d Down, \x1a Right, \x1f Shift (right)
+fn key_rows() -> &'static [&'static [char]] {
+    #[cfg(target_os = "macos")]
+    {
+        static ROWS: &[&[char]] = &[
+            &['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\x08'],
+            &['\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']', '\\'],
+            &['\x14', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', '\'', '\n'],
+            &['\x1e', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/', '\x1f'],
+            &['\u{2318}', '\x12', ' ', '\x1b', '\x1c', '\x1d', '\x1a', '\x11'],
+        ];
+        ROWS
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        static ROWS: &[&[char]] = &[
+            &['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\x08'],
+            &['\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']', '\\'],
+            &['\x14', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', '\'', '\n'],
+            &['\x1e', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/', '\x1f'],
+            &['\x11', '\x12', ' ', '\x1b', '\x1c', '\x1d', '\x1a'],
+        ];
+        ROWS
+    }
+}
+
 
 /// Actions produced by the keyboard widget interaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -145,7 +162,7 @@ impl Default for KeyboardState {
 impl KeyboardState {
     pub fn new() -> Self {
         let mut keys = Vec::new();
-        for row in KEY_ROWS {
+        for row in key_rows() {
             keys.extend_from_slice(row);
         }
         Self {
@@ -223,6 +240,8 @@ impl KeyboardState {
                     '\x1c' => "Left".to_string(),
                     '\x1d' => "Down".to_string(),
                     '\x1a' => "Right".to_string(),
+                    '\u{2318}' => "Cmd".to_string(),
+                    '\u{2325}' => "Opt".to_string(),
                     _ => key.to_string(),
                 };
                 self.last_output = format!("Clicked: {}", label);
@@ -242,7 +261,7 @@ pub struct KeyboardWidget {
 impl Default for KeyboardWidget {
     fn default() -> Self {
         Self {
-            rows: KEY_ROWS.iter().map(|r| r.to_vec()).collect(),
+            rows: key_rows().iter().map(|r| r.to_vec()).collect(),
         }
     }
 }
