@@ -11,6 +11,8 @@ ratatui = "0.30.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 gnostr-filetreelist = { path = "crates/filetreelist" }
+labtui-asyncgit = "0.28.3"
+
 [dev-dependencies]
 color-eyre = "0.6"
 strum = { version = "0.26", features = ["derive"] }
