@@ -8,9 +8,9 @@
 //! `Fn(Rect, &mut Buffer)`. If no custom content is supplied, the panel renders
 //! a default placeholder.
 
-use std::time::Duration;
+use std::{cell::RefCell, rc::Rc, time::Duration};
 
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, MouseEvent, MouseEventKind, MouseButton};
 use ratatui::{
     Frame,
     buffer::Buffer,
@@ -21,6 +21,7 @@ use ratatui::{
 };
 
 use crate::animation::{ColorTransition, Transition};
+use crate::mouse::{Button, ButtonState, ButtonTheme, is_mouse_over};
 
 /// Mutable state for [`MultiPanel`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -563,6 +564,190 @@ impl Widget for StateHelp {
     }
 }
 
+/// A cell in the interactive state help table.
+#[derive(Debug, Clone, Copy)]
+enum StateCell {
+    Header,
+    Left,
+    Right,
+    Footer,
+    TopBoost,
+    BottomBoost,
+    LeftBoost,
+    RightBoost,
+}
+
+impl StateCell {
+    const ALL: [StateCell; 8] = [
+        StateCell::Header,
+        StateCell::TopBoost,
+        StateCell::Left,
+        StateCell::BottomBoost,
+        StateCell::Right,
+        StateCell::LeftBoost,
+        StateCell::Footer,
+        StateCell::RightBoost,
+    ];
+
+    fn index(self) -> usize {
+        match self {
+            StateCell::Header => 0,
+            StateCell::TopBoost => 1,
+            StateCell::Left => 2,
+            StateCell::BottomBoost => 3,
+            StateCell::Right => 4,
+            StateCell::LeftBoost => 5,
+            StateCell::Footer => 6,
+            StateCell::RightBoost => 7,
+        }
+    }
+
+    fn from_index(index: usize) -> Option<Self> {
+        Self::ALL.get(index).copied()
+    }
+
+    fn label(self, app: &MultiPanelApp) -> String {
+        let (name, value) = match self {
+            StateCell::Header => ("Header", if app.state.header.target() > 0.5 { "open" } else { "closed" }),
+            StateCell::Left => ("Left", if app.state.left_sidebar.target() > 0.5 { "open" } else { "closed" }),
+            StateCell::Right => ("Right", if app.state.right_sidebar.target() > 0.5 { "open" } else { "closed" }),
+            StateCell::Footer => ("Footer", if app.state.footer.target() > 0.5 { "open" } else { "closed" }),
+            StateCell::TopBoost => ("Top boost", if app.top_boost { "on" } else { "off" }),
+            StateCell::BottomBoost => ("Bottom boost", if app.bottom_boost { "on" } else { "off" }),
+            StateCell::LeftBoost => ("Left boost", if app.left_boost { "on" } else { "off" }),
+            StateCell::RightBoost => ("Right boost", if app.right_boost { "on" } else { "off" }),
+        };
+        format!("{}: {}", name, value)
+    }
+
+    fn is_on(self, app: &MultiPanelApp) -> bool {
+        match self {
+            StateCell::Header => app.state.header.target() > 0.5,
+            StateCell::Left => app.state.left_sidebar.target() > 0.5,
+            StateCell::Right => app.state.right_sidebar.target() > 0.5,
+            StateCell::Footer => app.state.footer.target() > 0.5,
+            StateCell::TopBoost => app.top_boost,
+            StateCell::BottomBoost => app.bottom_boost,
+            StateCell::LeftBoost => app.left_boost,
+            StateCell::RightBoost => app.right_boost,
+        }
+    }
+
+    fn toggle(self, app: &mut MultiPanelApp) {
+        match self {
+            StateCell::Header => app.state.header.toggle_between(0.0, 1.0),
+            StateCell::Left => app.state.left_sidebar.toggle_between(0.0, 1.0),
+            StateCell::Right => app.state.right_sidebar.toggle_between(0.0, 1.0),
+            StateCell::Footer => app.state.footer.toggle_between(0.0, 1.0),
+            StateCell::TopBoost => app.top_boost = !app.top_boost,
+            StateCell::BottomBoost => app.bottom_boost = !app.bottom_boost,
+            StateCell::LeftBoost => app.left_boost = !app.left_boost,
+            StateCell::RightBoost => app.right_boost = !app.right_boost,
+        }
+    }
+}
+
+/// State for [`StateHelpTable`], tracking per-cell button hit areas and visual
+/// feedback.
+#[derive(Debug, Default, Clone)]
+pub struct StateHelpTableState {
+    button_states: [ButtonState; 8],
+}
+
+impl StateHelpTableState {
+    /// Handle a mouse event, returning `true` if it was consumed. Clicks on a
+    /// table cell toggle the corresponding panel or boost flag in `app`.
+    pub fn handle_mouse(&mut self, event: MouseEvent, app: &mut MultiPanelApp) -> bool {
+        let mut consumed = false;
+        let mut clicked: Option<StateCell> = None;
+        for (i, btn) in self.button_states.iter_mut().enumerate() {
+            if btn.handle_mouse(event) {
+                consumed = true;
+            }
+            if matches!(event.kind, MouseEventKind::Down(MouseButton::Left))
+                && let Some(area) = btn.last_area
+                && is_mouse_over(area, event.column, event.row)
+            {
+                clicked = StateCell::from_index(i);
+            }
+        }
+        if let Some(cell) = clicked {
+            cell.toggle(app);
+            // Reset visual states after a click; the next move event will
+            // restore hover highlighting.
+            for btn in &mut self.button_states {
+                btn.state = crate::mouse::VisualState::Normal;
+            }
+            consumed = true;
+        }
+        consumed
+    }
+}
+
+/// A 2×4 interactive table of panel and boost states.
+#[derive(Debug, Clone)]
+pub struct StateHelpTable {
+    bits: u8,
+    cells: [(StateCell, String, bool); 8],
+}
+
+impl StateHelpTable {
+    /// Create a table from the current app state.
+    pub fn new(app: &MultiPanelApp) -> Self {
+        let cells = StateCell::ALL.map(|cell| (cell, cell.label(app), cell.is_on(app)));
+        Self {
+            bits: state_bits(app),
+            cells,
+        }
+    }
+}
+
+impl StatefulWidget for StateHelpTable {
+    type State = StateHelpTableState;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
+
+        let sections = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(4)])
+            .split(area);
+
+        let bits_line = Paragraph::new(format!("State bits: {:08b}", self.bits))
+            .alignment(Alignment::Center);
+        Widget::render(bits_line, sections[0], buf);
+
+        let rows = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Ratio(1, 4),
+                Constraint::Ratio(1, 4),
+                Constraint::Ratio(1, 4),
+                Constraint::Ratio(1, 4),
+            ])
+            .split(sections[1]);
+
+        for (i, (cell, label, is_on)) in self.cells.iter().enumerate() {
+            let row = i / 2;
+            let col = i % 2;
+            let cols = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(rows[row]);
+            let cell_area = cols[col];
+            let theme = if *is_on {
+                ButtonTheme::GREEN
+            } else {
+                ButtonTheme::RED
+            };
+            let button = Button::new(Line::from(label.as_str())).theme(theme);
+            StatefulWidget::render(button, cell_area, buf, &mut state.button_states[cell.index()]);
+        }
+    }
+}
+
 // State bit indices for matrix operations.
 // Panel bits:
 const BIT_HEADER: u8 = 0;
@@ -646,6 +831,9 @@ pub struct MultiPanelApp {
     pub test_mode: Option<TestMode>,
     #[serde(skip)]
     pub config: MultiPanelAppConfig,
+    /// Interactive state help table state.
+    #[serde(skip)]
+    pub state_help_table_state: Rc<RefCell<StateHelpTableState>>,
 }
 
 impl std::fmt::Debug for MultiPanelApp {
@@ -730,6 +918,7 @@ impl MultiPanelApp {
             chart_time: 0.0,
             test_mode: None,
             config,
+            state_help_table_state: Rc::new(RefCell::new(StateHelpTableState::default())),
         }
     }
 
@@ -956,6 +1145,15 @@ impl MultiPanelApp {
         }
     }
 
+    /// Handle a mouse event. When the help overlay is open, clicks on the
+    /// interactive state table toggle the corresponding panel or boost flag.
+    pub fn handle_mouse(&mut self, event: MouseEvent) {
+        if self.show_help {
+            let state = self.state_help_table_state.clone();
+            state.borrow_mut().handle_mouse(event, self);
+        }
+    }
+
     /// Render the app into the given frame using the configured widget builder.
     pub fn render(&mut self, f: &mut Frame) {
         if self.show_help {
@@ -1137,16 +1335,21 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
             Widget::render(p, area, buf);
         })
         .main_content({
-            let state_help = StateHelp::new(_app);
-            let state_lines = state_help.text.lines().count() as u16 + 1;
+            let table = StateHelpTable::new(_app);
+            let table_state = _app.state_help_table_state.clone();
             move |_state, area, buf| {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints([Constraint::Min(0), Constraint::Length(state_lines)])
+                    .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)])
                     .split(area);
                 let help = Paragraph::new(help_text()).alignment(Alignment::Left);
                 Widget::render(help, chunks[0], buf);
-                Widget::render(state_help.clone(), chunks[1], buf);
+                StatefulWidget::render(
+                    table.clone(),
+                    chunks[1],
+                    buf,
+                    &mut table_state.borrow_mut(),
+                );
             }
         })
         .footer_content(|_state, area, buf| {

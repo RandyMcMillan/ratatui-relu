@@ -14,15 +14,20 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use ratatui_relu::multi_panel::MultiPanelApp;
+use ratatui_relu::{
+    mouse::{disable_mouse_capture, enable_mouse_capture},
+    multi_panel::MultiPanelApp,
+};
 
 fn setup_terminal() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
     stdout().execute(EnterAlternateScreen)?;
     enable_raw_mode()?;
+    enable_mouse_capture()?;
     Terminal::new(CrosstermBackend::new(stdout()))
 }
 
 fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
+    disable_mouse_capture()?;
     disable_raw_mode()?;
     terminal.backend_mut().execute(LeaveAlternateScreen)?;
     Ok(())
@@ -52,20 +57,26 @@ fn run_app(
         app.update(dt);
         terminal.draw(|f| app.render(f))?;
 
-        if event::poll(std::time::Duration::from_millis(16))?
-            && let Event::Key(key) = event::read()?
-            && key.kind == KeyEventKind::Press
-        {
-            app.handle_key_event(key);
-            if matches!(
-                key.code,
-                crossterm::event::KeyCode::Char('q') | crossterm::event::KeyCode::Esc
-            ) {
-                break;
+        if event::poll(std::time::Duration::from_millis(16))? {
+            match event::read()? {
+                Event::Key(key) if key.kind == KeyEventKind::Press => {
+                    app.handle_key_event(key);
+                    if matches!(
+                        key.code,
+                        crossterm::event::KeyCode::Char('q')
+                            | crossterm::event::KeyCode::Esc
+                    ) {
+                        break;
+                    }
+                    // Repaint immediately after a key press so state changes
+                    // are visible right away.
+                    terminal.draw(|f| app.render(f))?;
+                }
+                Event::Mouse(mouse) => {
+                    app.handle_mouse(mouse);
+                }
+                _ => {}
             }
-            // Repaint immediately after a key press so state changes are
-            // visible right away.
-            terminal.draw(|f| app.render(f))?;
         }
     }
     Ok(())
