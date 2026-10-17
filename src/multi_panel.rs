@@ -1562,9 +1562,13 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             if let Some(diff_text) = &git_diff_text {
                 let title = selected_file
                     .as_ref()
-                    .and_then(|p| p.file_name())
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("diff");
+                    .map(|p| {
+                        p.canonicalize()
+                            .unwrap_or_else(|_| p.clone())
+                            .display()
+                            .to_string()
+                    })
+                    .unwrap_or_else(|| "diff".to_string());
                 let block = ratatui::widgets::Block::bordered().title(title);
                 let inner = block.inner(area);
                 ratatui::widgets::Widget::render(block, area, buf);
@@ -1577,9 +1581,13 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             } else if !file_preview.is_empty() {
                 let title = selected_file
                     .as_ref()
-                    .and_then(|p| p.file_name())
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("preview");
+                    .map(|p| {
+                        p.canonicalize()
+                            .unwrap_or_else(|_| p.clone())
+                            .display()
+                            .to_string()
+                    })
+                    .unwrap_or_else(|| "preview".to_string());
                 let block = ratatui::widgets::Block::bordered().title(title);
                 let inner = block.inner(area);
                 ratatui::widgets::Widget::render(block, area, buf);
