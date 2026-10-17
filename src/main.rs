@@ -101,16 +101,17 @@ fn run_app(
                                 app.file_preview = content;
                             }
                         }
-                    } else if key.code == crossterm::event::KeyCode::Esc && (app.show_help || app.show_settings) {
+                    } else if key.code == crossterm::event::KeyCode::Esc {
+                        // Back out of everything without quitting.
                         app.show_help = false;
                         app.show_settings = false;
-                    } else if key.code == crossterm::event::KeyCode::Esc && app.main_active {
+                        app.show_terminal = false;
                         if app.main_boost {
                             app.main_boost = false;
                         } else {
                             app.main_active = false;
-                            // keep view state app.main_scroll = 0;
                         }
+                        app.file_tree_focus = false;
                     } else if key.modifiers.contains(crossterm::event::KeyModifiers::SHIFT)
                         && matches!(
                             key.code,

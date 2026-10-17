@@ -938,6 +938,9 @@ pub struct MultiPanelApp {
     /// Whether the terminal view is visible.
     #[serde(skip)]
     pub show_terminal: bool,
+    /// Whether the file tree has focus.
+    #[serde(skip)]
+    pub file_tree_focus: bool,
     /// Whether the color-transition demo is running.
     #[serde(skip)]
     pub color_demo: bool,
@@ -974,6 +977,7 @@ impl std::fmt::Debug for MultiPanelApp {
             .field("config", &"<MultiPanelAppConfig>")
             .field("show_settings", &self.show_settings)
             .field("show_terminal", &self.show_terminal)
+            .field("file_tree_focus", &self.file_tree_focus)
             .field("file_tree_state", &"<FileTreeState>")
             .field("file_tree_data", &"<FileTreeState>")
             .field("keyboard_state", &"<KeyboardState>")
@@ -1093,6 +1097,7 @@ impl MultiPanelApp {
             show_help: false,
             show_settings: false,
             show_terminal: false,
+            file_tree_focus: true,
             color_demo: false,
             color_demo_transition: None,
             color_demo_timer: Duration::ZERO,
@@ -1370,7 +1375,12 @@ impl MultiPanelApp {
         {
             match panel {
                     0 => self.state.header.toggle_between(0.0, 1.0),
-                    1 => self.state.left_sidebar.toggle_between(0.0, 1.0),
+                    1 => {
+                        self.state.left_sidebar.toggle_between(0.0, 1.0);
+                        if self.state.left_sidebar.target() > 0.5 {
+                            self.file_tree_focus = true;
+                        }
+                    }
                     2 => self.state.right_sidebar.toggle_between(0.0, 1.0),
                     3 => self.state.footer.toggle_between(0.0, 1.0),
                     _ => {}
@@ -1395,6 +1405,7 @@ impl MultiPanelApp {
             KeyCode::Char('M') => self.chart_mode = !self.chart_mode,
             KeyCode::Char(' ') => self.state.toggle_all(),
             KeyCode::Char('n') => self.line_numbers = !self.line_numbers,
+            KeyCode::Char('x') => self.show_terminal = !self.show_terminal,
             // File tree navigation in the left panel.
             KeyCode::Char('j') => {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Down);
@@ -1519,6 +1530,9 @@ impl MultiPanelApp {
             }
             // Terminal view
             (KeyCode::Char('f'), m) if m.contains(KeyModifiers::SHIFT) => {
+                self.show_terminal = !self.show_terminal;
+            }
+            (KeyCode::Char('x'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_terminal = !self.show_terminal;
             }
             _ => self.handle_key(key.code),
