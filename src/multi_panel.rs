@@ -1596,21 +1596,29 @@ impl MultiPanelApp {
     /// Render the app into the given frame using the configured widget builder.
     pub fn render(&mut self, f: &mut Frame) {
         if self.footer_terminal_focus {
-            // Render terminal in bottom 50% overlay.
             let area = f.area();
-            let term_area = Rect::new(
-                area.x,
-                area.y + area.height / 2,
-                area.width,
-                area.height / 2,
-            );
-            Clear.render(term_area, f.buffer_mut());
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(area);
+            // Render app in top half.
+            if self.show_help {
+                let mut help_state = MultiPanelState::open(8.0);
+                let help_config = MultiPanelAppConfig::help();
+                let widget = (help_config.widget_builder)(self);
+                f.render_stateful_widget(widget, chunks[0], &mut help_state);
+            } else {
+                let widget = (self.config.widget_builder)(self);
+                f.render_stateful_widget(widget, chunks[0], &mut self.state);
+            }
+            // Render terminal in bottom half.
+            Clear.render(chunks[1], f.buffer_mut());
             if let Some(term) = &mut *self.terminal.borrow_mut() {
                 term.poll();
                 use tui_term::widget::PseudoTerminal;
                 let block = Block::default().borders(Borders::ALL).title("Terminal");
-                let inner = block.inner(term_area);
-                Widget::render(block, term_area, f.buffer_mut());
+                let inner = block.inner(chunks[1]);
+                Widget::render(block, chunks[1], f.buffer_mut());
                 if inner.width > 0 && inner.height > 0 {
                     let pseudo = PseudoTerminal::new(term.parser.screen());
                     Widget::render(pseudo, inner, f.buffer_mut());
