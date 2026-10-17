@@ -3,6 +3,11 @@ name: Cache Factory
 on:
   workflow_call:
     inputs:
+      os:
+        description: Runner OS for cache
+        required: false
+        type: string
+        default: ubuntu-latest
       rust-version:
         description: Rust toolchain version to cache
         required: false
@@ -12,7 +17,7 @@ on:
 jobs:
   populate-cache:
     name: Populate Rust cache
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.os || 'ubuntu-latest' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,7 +25,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ inputs.rust-version }}
+          toolchain: ${{ inputs.rust-version || 'stable' }}
 
       - name: Restore / populate cargo cache
         uses: Swatinem/rust-cache@v2
