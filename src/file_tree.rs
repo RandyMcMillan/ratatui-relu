@@ -19,19 +19,26 @@ use ratatui::{
 use labtui_asyncgit::sync::status::{StatusItem, StatusItemType};
 
 /// Mutable state for [`FileTreeWidget`].
-#[derive(Default)]
+#[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct FileTreeState {
     /// Source paths (unsorted input is sorted on rebuild).
     paths: Vec<PathBuf>,
     /// Set of collapsed folder paths (as strings).
     collapsed: BTreeSet<String>,
+    /// Selected item path (persisted).
+    #[serde(default)]
+    selected: Option<PathBuf>,
+    /// Scroll offset (persisted).
+    #[serde(default)]
+    scroll: usize,
     /// Git status per path.
+    #[serde(skip)]
     git_status_map: HashMap<PathBuf, StatusItemType>,
     /// Built tree (None when empty).
+    #[serde(skip)]
     tree: Option<filetreelist::FileTree>,
-    /// Visual index of the first rendered row.
-    scroll: usize,
     /// Last rendered viewport height (rows).
+    #[serde(skip)]
     viewport_height: usize,
 }
 
@@ -97,10 +104,10 @@ impl FileTreeState {
 
     /// Path of the currently selected item.
     pub fn selected_path(&self) -> Option<&Path> {
-        self.tree
-            .as_ref()
-            .and_then(filetreelist::FileTree::selected_file)
-            .map(TreeItemInfo::full_path)
+        if let Some(info) = self.tree.as_ref().and_then(filetreelist::FileTree::selected_file) {
+            return Some(info.full_path());
+        }
+        self.selected.as_deref()
     }
 
     /// Current scroll offset (visual index of first rendered row).
@@ -108,16 +115,41 @@ impl FileTreeState {
         self.scroll
     }
 
+    pub fn restore(&mut self) {
+        self.rebuild();
+    }
+
+    pub fn apply_persisted(&mut self, data: &Self) {
+        self.paths = data.paths.clone();
+        self.collapsed = data.collapsed.clone();
+        self.selected = data.selected.clone();
+        self.scroll = data.scroll;
+        self.rebuild();
+    }
+
+    pub fn snapshot(&self) -> Self {
+        Self {
+            paths: self.paths.clone(),
+            collapsed: self.collapsed.clone(),
+            selected: self.selected.clone(),
+            scroll: self.scroll,
+            git_status_map: Default::default(),
+            tree: None,
+            viewport_height: 0,
+        }
+    }
+
     fn rebuild(&mut self) {
         if self.paths.is_empty() {
             self.tree = None;
-            self.scroll = 0;
             return;
         }
         let refs: Vec<&Path> = self.paths.iter().map(PathBuf::as_path).collect();
         let collapsed_refs: BTreeSet<&String> = self.collapsed.iter().collect();
         self.tree = filetreelist::FileTree::new(&refs, &collapsed_refs).ok();
-        self.scroll = 0;
+        if let (Some(tree), Some(path)) = (self.tree.as_mut(), self.selected.as_ref()) {
+            tree.select_file(path);
+        }
     }
 
     /// Handle a key press. Returns `true` if the tree state changed.
@@ -154,6 +186,12 @@ impl FileTreeState {
             }
             _ => return false,
         }
+
+        self.selected = self.tree.as_ref().and_then(|t| {
+            t.iterate(0, usize::MAX)
+                .find(|(_, is_sel)| *is_sel)
+                .map(|(item, _)| item.info().full_path().to_path_buf())
+        });
 
         self.ensure_selection_visible();
         changed
@@ -392,7 +430,9 @@ mod tests {
         let mut buf = Buffer::empty(Rect::new(0, 0, 40, 10));
         StatefulWidget::render(widget.clone(), buf.area, &mut buf, &mut state);
 
-        // selection starts at first visible
+        // Move to a file (initial selection is the root folder).
+        state.handle_key(ratatui::crossterm::event::KeyCode::Down);
+        state.handle_key(ratatui::crossterm::event::KeyCode::Down);
         assert!(state.selected_path().is_some());
 
         let changed = state.handle_key(ratatui::crossterm::event::KeyCode::Down);
