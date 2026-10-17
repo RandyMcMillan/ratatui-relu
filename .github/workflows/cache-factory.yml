@@ -32,5 +32,11 @@ jobs:
         with:
           shared-key: "ratatui-relu"
 
+      - name: Fetch dependencies
+        run: cargo fetch --locked
+
       - name: Build to warm cache
         run: cargo build --locked
+
+      - name: Build tests to warm dev-dependencies
+        run: cargo test --locked --no-run
