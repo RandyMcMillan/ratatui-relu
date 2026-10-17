@@ -1274,7 +1274,9 @@ impl MultiPanelApp {
             ('l', 1),
             ('a', 1),
             ('r', 2),
+            ('u', 2),
             ('f', 3),
+            ('h', 3),
         ];
         if let KeyCode::Char(c) = code {
             if let Some((_, panel)) = PANEL_TOGGLE_KEYS.iter().find(|(k, _)| *k == c) {
