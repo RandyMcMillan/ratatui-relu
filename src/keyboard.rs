@@ -16,6 +16,7 @@ fn key_rows() -> &'static [&'static [char]] {
     #[cfg(target_os = "macos")]
     {
         static ROWS: &[&[char]] = &[
+            &['\u{E001}', '\u{E002}', '\u{E003}', '\u{E004}', '\u{E005}', '\u{E006}', '\u{E007}', '\u{E008}', '\u{E009}', '\u{E00A}', '\u{E00B}', '\u{E00C}'],
             &['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\x08'],
             &['\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']', '\\'],
             &['\x14', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', '\'', '\n'],
@@ -27,6 +28,7 @@ fn key_rows() -> &'static [&'static [char]] {
     #[cfg(not(target_os = "macos"))]
     {
         static ROWS: &[&[char]] = &[
+            &['\u{E001}', '\u{E002}', '\u{E003}', '\u{E004}', '\u{E005}', '\u{E006}', '\u{E007}', '\u{E008}', '\u{E009}', '\u{E00A}', '\u{E00B}', '\u{E00C}'],
             &['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\x08'],
             &['\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']', '\\'],
             &['\x14', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', '\'', '\n'],
@@ -43,6 +45,7 @@ fn key_rows() -> &'static [&'static [char]] {
 pub enum KeyboardAction {
     Char(char),
     Space,
+    Function(u8),
     Backspace,
     Tab,
     Enter,
@@ -225,6 +228,9 @@ impl KeyboardState {
                     '\x1c' => KeyboardAction::Left,
                     '\x1d' => KeyboardAction::Down,
                     '\x1a' => KeyboardAction::Right,
+                    c if (c as u32) >= 0xE001 && (c as u32) <= 0xE00C => {
+                        KeyboardAction::Function(((c as u32) - 0xE000) as u8)
+                    }
                     _ => KeyboardAction::Char(key),
                 };
                 let label = match key {
@@ -240,6 +246,9 @@ impl KeyboardState {
                     '\x1c' => "Left".to_string(),
                     '\x1d' => "Down".to_string(),
                     '\x1a' => "Right".to_string(),
+                    c if (c as u32) >= 0xE001 && (c as u32) <= 0xE00C => {
+                        format!("F{}", (c as u32) - 0xE000)
+                    }
                     '\u{2318}' => "Cmd".to_string(),
                     '\u{2325}' => "Opt".to_string(),
                     _ => key.to_string(),
@@ -298,6 +307,9 @@ impl StatefulWidget for KeyboardWidget {
                     '\x1c' => "←".to_string(),
                     '\x1d' => "↓".to_string(),
                     '\x1a' => "→".to_string(),
+                    c if (c as u32) >= 0xE001 && (c as u32) <= 0xE00C => {
+                        format!("F{}", (c as u32) - 0xE000)
+                    }
                     _ => key.to_string(),
                 };
                 let w: u16 = 5;

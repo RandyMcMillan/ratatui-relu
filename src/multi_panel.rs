@@ -1496,6 +1496,7 @@ impl MultiPanelApp {
                     KeyboardAction::Left => self.handle_key(KeyCode::Left),
                     KeyboardAction::Down => self.handle_key(KeyCode::Down),
                     KeyboardAction::Right => self.handle_key(KeyCode::Right),
+                    KeyboardAction::Function(n) => self.handle_key(KeyCode::F(n)),
                     KeyboardAction::Up => self.handle_key(KeyCode::Up),
                     _ => {}
                 }
