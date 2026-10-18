@@ -2498,10 +2498,11 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
                         .title_alignment(Alignment::Left);
                     let toggles_inner = toggles_block.inner(rows[1]);
                     Widget::render(toggles_block, rows[1], buf);
-                    Widget::render(
-                        Paragraph::new("Press Right to toggle table view").alignment(Alignment::Center),
+                    StatefulWidget::render(
+                        table.clone(),
                         toggles_inner,
                         buf,
+                        &mut table_state.borrow_mut(),
                     );
                 }
             }
@@ -2621,6 +2622,17 @@ pub fn make_statusbar_content(
             Paragraph::new(format!("{:08b}", state_bits)).alignment(Alignment::Right)
         };
         Widget::render(bits_widget, halves[1], buf);
+    }
+}
+
+/// Build a reusable closure that renders the interactive state-help table.
+pub fn make_state_help_table_view(
+    app: &MultiPanelApp,
+) -> impl Fn(&mut MultiPanelState, Rect, &mut Buffer) + 'static {
+    let table = StateHelpTable::new(app);
+    let table_state = app.state_help_table_state.clone();
+    move |_state: &mut MultiPanelState, area: Rect, buf: &mut Buffer| {
+        StatefulWidget::render(table.clone(), area, buf, &mut table_state.borrow_mut());
     }
 }
 
