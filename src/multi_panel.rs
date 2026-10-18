@@ -509,6 +509,25 @@ impl StatefulWidget for MultiPanel {
             state,
             self.footer_content.as_deref(),
         );
+
+        // Log all widget dimensions to disk.
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/tmp/ratatui_dims.log")
+        {
+            use std::io::Write;
+            let _ = writeln!(
+                file,
+                "  header={}x{} left={}x{} main={}x{} right={}x{} statusbar={}x{} footer={}x{}",
+                vertical[0].width, vertical[0].height,
+                horizontal[0].width, horizontal[0].height,
+                horizontal[1].width, horizontal[1].height,
+                horizontal[2].width, horizontal[2].height,
+                vertical[2].width, vertical[2].height,
+                vertical[3].width, vertical[3].height,
+            );
+        }
     }
 }
 
