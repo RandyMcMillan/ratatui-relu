@@ -1285,9 +1285,21 @@ impl MultiPanelApp {
                         }
                     }
                     KeyCode::Right => {
-                        // Boost the main view.
-                        self.main_boost = !self.main_boost;
-                        self.right_boost = true;
+                        if self.main_boost {
+                            // While boosted, toggle the right panel (git blame).
+                            self.state.right_sidebar.toggle_between(0.0, 1.0);
+                            if self.state.right_sidebar.target() > 0.5 {
+                                if let (Some(git), Some(path)) =
+                                    (&mut self.git, self.selected_file.clone())
+                                {
+                                    git.fetch_blame(&path);
+                                }
+                            }
+                        } else {
+                            // Boost the main view.
+                            self.main_boost = !self.main_boost;
+                            self.right_boost = true;
+                        }
                     }
                     _ => {}
                 }
@@ -1890,7 +1902,12 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     let main_boost = app.main_boost;
     let line_numbers = app.line_numbers;
     let (left_fraction, right_fraction, header_height, footer_height) = if main_boost {
-        (0.0, 0.0, 0u16, 0u16)
+        let r = if app.state.right_sidebar.target() > 0.5 {
+            right_fraction
+        } else {
+            0.0
+        };
+        (0.0, r, 0u16, 0u16)
     } else {
         (left_fraction, right_fraction, header_height, footer_height)
     };
