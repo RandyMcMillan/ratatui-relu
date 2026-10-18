@@ -996,7 +996,12 @@ pub struct MultiPanelApp {
     /// Footer terminal area (for mouse hit-testing).
     #[serde(skip)]
     pub footer_terminal_area: Rc<RefCell<Option<Rect>>>,
-    /// Whether the footer terminal has focus.
+    /// Statusbar area (for mouse hit-testing; clicks here are ignored).
+    #[serde(skip)]
+    pub statusbar_area: Rc<RefCell<Option<Rect>>>,
+    /// Statusbar state-bits area (clicking here copies the bits to clipboard).
+    #[serde(skip)]
+    pub statusbar_bits_area: Rc<RefCell<Option<Rect>>>,    /// Whether the footer terminal has focus.
     #[serde(skip)]
     pub footer_terminal_focus: bool,
     /// Currently selected file path (loaded on Enter).
@@ -1014,6 +1019,9 @@ pub struct MultiPanelApp {
     /// Boost flag for the main file view (full-screen).
     #[serde(skip)]
     pub main_boost: bool,
+    /// Flash state bits until this instant after copying.
+    #[serde(skip)]
+    pub bits_flash_until: Option<std::time::Instant>,
     /// Whether the right panel is expanded to full width.
     #[serde(skip)]
     pub right_full: bool,
@@ -1029,6 +1037,9 @@ pub struct MultiPanelApp {
     /// Whether the terminal view is visible.
     #[serde(skip)]
     pub show_terminal: bool,
+    /// Whether the state-decode table is visible in settings.
+    #[serde(skip)]
+    pub show_state_table: bool,
     /// Whether the file tree has focus.
     #[serde(skip)]
     pub file_tree_focus: bool,
@@ -1192,16 +1203,20 @@ impl MultiPanelApp {
             git: GitState::new(),
             terminal: Rc::new(RefCell::new(TerminalState::new())),
             footer_terminal_area: Rc::new(RefCell::new(None)),
+            statusbar_area: Rc::new(RefCell::new(None)),
+            statusbar_bits_area: Rc::new(RefCell::new(None)),
             footer_terminal_focus: false,
             selected_file: None,
             file_preview: String::new(),
             main_active: false,
             main_scroll: 0,
             main_boost: false,
+            bits_flash_until: None,
             line_numbers: true,
             show_help: false,
             show_settings: false,
             show_terminal: false,
+            show_state_table: false,
             file_tree_focus: true,
             color_demo: false,
             color_demo_transition: None,
@@ -1732,6 +1747,9 @@ impl MultiPanelApp {
                 crossterm::event::KeyCode::Char('n') => {
                     self.line_numbers = !self.line_numbers;
                 }
+                crossterm::event::KeyCode::Right => {
+                    self.show_state_table = !self.show_state_table;
+                }
                 _ => {}
             }
             return;
@@ -1801,7 +1819,7 @@ impl MultiPanelApp {
     /// Handle a mouse event. When the help overlay is open, clicks on the
     /// interactive state table toggle the corresponding panel or boost flag.
     pub fn handle_mouse(&mut self, event: MouseEvent) {
-        if self.show_help {
+        if self.show_help || self.show_settings {
             let state = self.state_help_table_state.clone();
             state.borrow_mut().handle_mouse(event, self);
             let kb = self.keyboard_state.clone();
@@ -1823,6 +1841,50 @@ impl MultiPanelApp {
                     KeyboardAction::Function(n) => self.handle_key(KeyCode::F(n)),
                     KeyboardAction::Up => self.handle_key(KeyCode::Up),
                     _ => {}
+                }
+            }
+        }
+
+        // Copy state bits to clipboard when clicked.
+        if let crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) =
+            event.kind
+        {
+            let bits_opt = *self.statusbar_bits_area.borrow();
+            if let Some(bits_area) = bits_opt {
+                if bits_area.x <= event.column
+                    && event.column < bits_area.x + bits_area.width
+                    && bits_area.y <= event.row
+                    && event.row < bits_area.y + bits_area.height
+                {
+                    let bits = format!("{:08b}", state_bits(self));
+                    self.bits_flash_until = Some(std::time::Instant::now() + std::time::Duration::from_millis(400));
+                    let _ = std::process::Command::new("pbcopy")
+                        .stdin(std::process::Stdio::piped())
+                        .spawn()
+                        .and_then(|mut child| {
+                            use std::io::Write;
+                            if let Some(stdin) = child.stdin.as_mut() {
+                                let _ = stdin.write_all(bits.as_bytes());
+                            }
+                            child.wait()
+                        });
+                    return;
+                }
+            }
+        }
+
+        // Ignore clicks on the rest of the statusbar.
+        if let crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) =
+            event.kind
+        {
+            let sb_opt = *self.statusbar_area.borrow();
+            if let Some(sb) = sb_opt {
+                if sb.x <= event.column
+                    && event.column < sb.x + sb.width
+                    && sb.y <= event.row
+                    && event.row < sb.y + sb.height
+                {
+                    return;
                 }
             }
         }
@@ -2292,21 +2354,32 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         })
         .statusbar_content({
             let state_bits = state_bits(app);
+            let bits_flashing = app
+                .bits_flash_until
+                .map(|t| std::time::Instant::now() < t)
+                .unwrap_or(false);
+            let statusbar_area = app.statusbar_area.clone();
+            let statusbar_bits_area = app.statusbar_bits_area.clone();
             move |_state, area, buf| {
+                *statusbar_area.borrow_mut() = Some(area);
                 let halves = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                     .split(area);
+                *statusbar_bits_area.borrow_mut() = Some(halves[1]);
                 Widget::render(
                     Paragraph::new(help).alignment(Alignment::Left),
                     halves[0],
                     buf,
                 );
-                Widget::render(
-                    Paragraph::new(format!("{:08b}", state_bits)).alignment(Alignment::Right),
-                    halves[1],
-                    buf,
-                );
+                let bits_widget = if bits_flashing {
+                    Paragraph::new("copied!")
+                        .alignment(Alignment::Right)
+                        .fg(Color::Green)
+                } else {
+                    Paragraph::new(format!("{:08b}", state_bits)).alignment(Alignment::Right)
+                };
+                Widget::render(bits_widget, halves[1], buf);
             }
         })
         .footer_content({
@@ -2414,34 +2487,61 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .main_content({
             let table = StateHelpTable::new(_app);
             let table_state = _app.state_help_table_state.clone();
+            let show_state_table = _app.show_state_table;
+            let bits = state_bits(_app);
+            let rows = [
+                ("7", "Top (header)", if (bits >> 7) & 1 == 1 { "1" } else { "0" }, if (bits >> 7) & 1 == 1 { "open" } else { "closed" }),
+                ("6", "Top boost", if (bits >> 6) & 1 == 1 { "1" } else { "0" }, if (bits >> 6) & 1 == 1 { "on" } else { "off" }),
+                ("5", "Left sidebar", if (bits >> 5) & 1 == 1 { "1" } else { "0" }, if (bits >> 5) & 1 == 1 { "open" } else { "closed" }),
+                ("4", "Left boost", if (bits >> 4) & 1 == 1 { "1" } else { "0" }, if (bits >> 4) & 1 == 1 { "on" } else { "off" }),
+                ("3", "Right boost", if (bits >> 3) & 1 == 1 { "1" } else { "0" }, if (bits >> 3) & 1 == 1 { "on" } else { "off" }),
+                ("2", "Right sidebar", if (bits >> 2) & 1 == 1 { "1" } else { "0" }, if (bits >> 2) & 1 == 1 { "open" } else { "closed" }),
+                ("1", "Bottom boost", if (bits >> 1) & 1 == 1 { "1" } else { "0" }, if (bits >> 1) & 1 == 1 { "on" } else { "off" }),
+                ("0", "Bottom (footer)", if bits & 1 == 1 { "1" } else { "0" }, if bits & 1 == 1 { "open" } else { "closed" }),
+            ];
+            let mut decode_text = format!("State bits: {:08b}\n\n", bits);
+            decode_text.push_str(&format!("{:<4}{:<18}{:<7}{}\n", "Bit", "Name", "Value", "Meaning"));
+            decode_text.push_str(&format!("{}\n", "-".repeat(40)));
+            for (bit, name, value, meaning) in &rows {
+                decode_text.push_str(&format!("{:<4}{:<18}{:<7}{}\n", bit, name, value, meaning));
+            }
             move |_state, area, buf| {
-                let rows = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)])
-                    .split(area);
+                if show_state_table {
+                    // Interactive table view with cells/buttons for each bit.
+                    StatefulWidget::render(
+                        table.clone(),
+                        area,
+                        buf,
+                        &mut table_state.borrow_mut(),
+                    );
+                } else {
+                    let rows = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)])
+                        .split(area);
 
-                let shortcuts_block = Block::bordered()
-                    .title("Shortcuts")
-                    .title_alignment(Alignment::Left);
-                let shortcuts_inner = shortcuts_block.inner(rows[0]);
-                Widget::render(shortcuts_block, rows[0], buf);
-                Widget::render(
-                    Paragraph::new(help_text()).alignment(Alignment::Left),
-                    shortcuts_inner,
-                    buf,
-                );
+                    let shortcuts_block = Block::bordered()
+                        .title("Shortcuts")
+                        .title_alignment(Alignment::Left);
+                    let shortcuts_inner = shortcuts_block.inner(rows[0]);
+                    Widget::render(shortcuts_block, rows[0], buf);
+                    Widget::render(
+                        Paragraph::new(help_text()).alignment(Alignment::Left),
+                        shortcuts_inner,
+                        buf,
+                    );
 
-                let toggles_block = Block::bordered()
-                    .title("Toggles")
-                    .title_alignment(Alignment::Left);
-                let toggles_inner = toggles_block.inner(rows[1]);
-                Widget::render(toggles_block, rows[1], buf);
-                StatefulWidget::render(
-                    table.clone(),
-                    toggles_inner,
-                    buf,
-                    &mut table_state.borrow_mut(),
-                );
+                    let toggles_block = Block::bordered()
+                        .title("Toggles")
+                        .title_alignment(Alignment::Left);
+                    let toggles_inner = toggles_block.inner(rows[1]);
+                    Widget::render(toggles_block, rows[1], buf);
+                    Widget::render(
+                        Paragraph::new("Press Right to toggle table view").alignment(Alignment::Center),
+                        toggles_inner,
+                        buf,
+                    );
+                }
             }
         })
         .statusbar_content(|_state, area, buf| {
