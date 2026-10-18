@@ -36,6 +36,12 @@ pub struct MultiPanelState {
     pub footer: Transition,
 }
 
+impl Default for MultiPanelState {
+    fn default() -> Self {
+        Self::open(8.0)
+    }
+}
+
 impl MultiPanelState {
     /// Create a new state. Use `open = true` to start all panels open,
     /// `open = false` to start them closed.
@@ -962,6 +968,8 @@ impl MultiPanelAppConfig {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct MultiPanelApp {
     pub state: MultiPanelState,
+    #[serde(skip, default)]
+    pub settings_state: MultiPanelState,
     pub left_boost: bool,
     pub right_boost: bool,
     pub top_boost: bool,
@@ -1028,6 +1036,9 @@ pub struct MultiPanelApp {
     /// Whether the terminal view is visible.
     #[serde(skip)]
     pub show_terminal: bool,
+    /// Whether the keyboard is shown in the settings footer.
+    #[serde(skip)]
+    pub show_keyboard: bool,
     /// Whether the state-decode table is visible in settings.
     #[serde(skip)]
     pub show_state_table: bool,
@@ -1162,6 +1173,11 @@ impl MultiPanelApp {
             if app.terminal.borrow().is_none() {
                 *app.terminal.borrow_mut() = TerminalState::new();
             }
+            app.settings_state = {
+                let mut s = MultiPanelState::open(8.0);
+                s.footer.set_target(0.0);
+                s
+            };
             if app.keyboard_state.borrow().keys.is_empty() {
                 *app.keyboard_state.borrow_mut() = crate::keyboard::KeyboardState::new();
             }
@@ -1180,6 +1196,11 @@ impl MultiPanelApp {
     pub fn from_state_with_config(state: MultiPanelState, config: MultiPanelAppConfig) -> Self {
         Self {
             state,
+            settings_state: {
+                let mut s = MultiPanelState::open(8.0);
+                s.footer.set_target(0.0);
+                s
+            },
             left_boost: false,
             right_boost: false,
             right_full: false,
@@ -1208,6 +1229,7 @@ impl MultiPanelApp {
             show_settings: false,
             show_terminal: false,
             show_state_table: false,
+            show_keyboard: false,
             file_tree_focus: true,
             color_demo: false,
             color_demo_transition: None,
@@ -1258,6 +1280,7 @@ impl MultiPanelApp {
     /// Advance animations, automated test mode, color demo, and charts.
     pub fn update(&mut self, dt: Duration) {
         self.state.update(dt);
+        self.settings_state.update(dt);
 
         if let Some(git) = &mut self.git {
             git.poll();
@@ -1621,11 +1644,8 @@ impl MultiPanelApp {
                 self.terminal_cd_to_selection();
             } // right handed                 // left handed
             KeyCode::Char('\\') => {
-                if self.show_help {
-                    self.show_help = false;
-                } else if self.show_settings {
+                if self.show_settings {
                     self.show_settings = false;
-                    self.show_help = true;
                 } else {
                     self.show_settings = true;
                 }
@@ -1725,14 +1745,8 @@ impl MultiPanelApp {
                     self.show_terminal = false;
                 }
                 crossterm::event::KeyCode::Char('\\') => {
-                    // toggle view help/settings
-                    if self.show_help {
-                        self.show_help = false;
-                        self.show_settings = true;
-                    } else {
-                        self.show_settings = false;
-                        self.show_help = true;
-                    }
+                    // toggle settings only
+                    self.show_settings = !self.show_settings;
                 }
                 // TODO filter blame view line numbers correctly
                 crossterm::event::KeyCode::Char('n') => {
@@ -1740,6 +1754,15 @@ impl MultiPanelApp {
                 }
                 crossterm::event::KeyCode::Right => {
                     self.show_state_table = !self.show_state_table;
+                }
+                crossterm::event::KeyCode::Up => {
+                    self.show_keyboard = !self.show_keyboard;
+                    // Animate the footer like a mobile keyboard sliding up.
+                    if self.show_keyboard {
+                        self.settings_state.footer.set_target(1.0);
+                    } else {
+                        self.settings_state.footer.set_target(0.0);
+                    }
                 }
                 _ => {}
             }
@@ -2028,9 +2051,8 @@ impl MultiPanelApp {
         if self.show_settings {
             let area = f.area();
             Clear.render(area, f.buffer_mut());
-            let mut settings_state = MultiPanelState::open(8.0);
             let widget = settings_widget_builder(self);
-            f.render_stateful_widget(widget, area, &mut settings_state);
+            f.render_stateful_widget(widget, area, &mut self.settings_state);
         } else if self.show_terminal {
             let area = f.area();
             Clear.render(area, f.buffer_mut());
@@ -2508,9 +2530,20 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
             }
         })
         .statusbar_content(make_statusbar_content("Settings".to_string(), _app))
-        .footer_content(|_state, area, buf| {
-            let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
-            //Widget::render(p, area, buf);
+        .footer_content({
+            let show_keyboard = _app.show_keyboard;
+            let keyboard_state = _app.keyboard_state.clone();
+            move |_state, area, buf| {
+                if show_keyboard {
+                    use ratatui::widgets::StatefulWidget;
+                    let widget = KeyboardWidget::default();
+                    let mut st = keyboard_state.borrow_mut();
+                    StatefulWidget::render(widget, area, buf, &mut st);
+                } else {
+                    let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
+                    Widget::render(p, area, buf);
+                }
+            }
         })
         .header_color(Color::Cyan)
         .left_color(Color::Green)
@@ -2559,19 +2592,15 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
                                  //0                     //1                     //2 
-                    .constraints([Constraint::Ratio(1,5), Constraint::Ratio(1,5), Constraint::Ratio(1,2), Constraint::Ratio(0,10)])
+                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                     .split(area);
                 let output = keyboard_state.borrow().last_output.clone();
                 let p = Paragraph::new(output).alignment(Alignment::Center);
-                Widget::render(p.clone(), chunks[0], buf); // first in
-                Widget::render(p, chunks[1], buf); // first in
+                Widget::render(p, chunks[0], buf); // top half
                 let widget = KeyboardWidget::default();
                 let mut st = keyboard_state.borrow_mut();
-                StatefulWidget::render(table.clone(), chunks[1], buf, &mut table_state.borrow_mut()); // display toggle controls 25% height
-                StatefulWidget::render(widget.clone(), chunks[2], buf, &mut st); // display keyboard on
-                                                                         // bottom
-                StatefulWidget::render(widget, chunks[3], buf, &mut st); // display keyboard on
-                                                                         // bottom
+                StatefulWidget::render(table.clone(), chunks[0], buf, &mut table_state.borrow_mut()); // table in top half
+                StatefulWidget::render(widget, chunks[1], buf, &mut st); // keyboard in bottom half
             }
         })        .footer_content(|_state, area, buf| {
             let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
