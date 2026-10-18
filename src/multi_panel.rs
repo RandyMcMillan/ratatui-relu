@@ -1947,8 +1947,12 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         .right_title(
             selected_file
                 .as_ref()
-                .and_then(|p| p.file_name())
-                .map(|n| n.to_string_lossy().to_string())
+                .map(|p| {
+                    std::fs::canonicalize(p)
+                        .unwrap_or_else(|_| p.clone())
+                        .display()
+                        .to_string()
+                })
                 .unwrap_or_else(|| "Right".to_string()),
         )
         .main_title("")
