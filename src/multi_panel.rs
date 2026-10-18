@@ -1283,11 +1283,13 @@ impl MultiPanelApp {
                     KeyCode::Right => {
                         // Boost the main view.
                         self.main_boost = !self.main_boost;
+                        self.right_boost = true;
                     }
                     _ => {}
                 }
                 if let Some(path) = &self.selected_file {
-                    self.file_view_scrolls.insert(path.clone(), self.main_scroll);
+                    self.file_view_scrolls
+                        .insert(path.clone(), self.main_scroll);
                 }
                 return;
             }
@@ -1318,6 +1320,7 @@ impl MultiPanelApp {
                         .unwrap_or(0);
                     if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
                         git.fetch_diff(&path);
+                        git.fetch_blame(&path);
                     }
                     return;
                 }
@@ -1344,6 +1347,7 @@ impl MultiPanelApp {
                         .unwrap_or(0);
                     if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
                         git.fetch_diff(&path);
+                        git.fetch_blame(&path);
                     }
                 }
                 return;
@@ -1384,6 +1388,7 @@ impl MultiPanelApp {
                 };
                 if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
                     git.fetch_diff(&path);
+                    git.fetch_blame(&path);
                 }
             }
             return;
@@ -1405,19 +1410,19 @@ impl MultiPanelApp {
             && let Some((_, panel)) = PANEL_TOGGLE_KEYS.iter().find(|(k, _)| *k == c)
         {
             match panel {
-                    0 => self.state.header.toggle_between(0.0, 1.0),
-                    1 => {
-                        self.state.left_sidebar.toggle_between(0.0, 1.0);
-                        if self.state.left_sidebar.target() > 0.5 {
-                            self.file_tree_focus = true;
-                        }
+                0 => self.state.header.toggle_between(0.0, 1.0),
+                1 => {
+                    self.state.left_sidebar.toggle_between(0.0, 1.0);
+                    if self.state.left_sidebar.target() > 0.5 {
+                        self.file_tree_focus = true;
                     }
-                    2 => self.state.right_sidebar.toggle_between(0.0, 1.0),
-                    3 => self.state.footer.toggle_between(0.0, 1.0),
-                    _ => {}
                 }
-                return;
+                2 => self.state.right_sidebar.toggle_between(0.0, 1.0),
+                3 => self.state.footer.toggle_between(0.0, 1.0),
+                _ => {}
             }
+            return;
+        }
 
         match code {
             // A = Automated Test Mode
@@ -1439,7 +1444,7 @@ impl MultiPanelApp {
             KeyCode::Char('x') => {
                 self.footer_terminal_focus = true;
                 self.terminal_cd_to_selection();
-            }            // File tree navigation in the left panel.
+            } // File tree navigation in the left panel.
             KeyCode::Char('j') => {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Down);
                 self.terminal_cd_to_selection();
@@ -1493,10 +1498,12 @@ impl MultiPanelApp {
             KeyCode::Right => {
                 let right_closed = self.state.right_sidebar.target() < 0.5;
                 let left_open = self.state.left_sidebar.target() > 0.5;
-                // When a file is open and the left panel is closed, Right opens
-                // the right panel and loads git blame for the file.
-                if (self.main_active || self.selected_file.is_some()) && !left_open {
-                    self.state.right_sidebar.set_target(1.0);
+                // When a file is open and the left panel is closed and the right
+                // panel is closed, Right toggles the right panel open and loads
+                // git blame for the file.
+                if (self.main_active || self.selected_file.is_some()) && !left_open && right_closed
+                {
+                    self.state.right_sidebar.toggle_between(0.0, 1.0);
                     if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
                         git.fetch_blame(&path);
                     }
@@ -1623,7 +1630,9 @@ impl MultiPanelApp {
         }
 
         // Footer terminal focus on click.
-        if let crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) = event.kind {
+        if let crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) =
+            event.kind
+        {
             let area_opt = *self.footer_terminal_area.borrow();
             if let Some(area) = area_opt {
                 if area.x <= event.column
@@ -1669,12 +1678,17 @@ impl MultiPanelApp {
                 .unwrap_or(0);
             if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
                 git.fetch_diff(&path);
+                git.fetch_blame(&path);
             }
         }
     }
 
     pub fn terminal_cd_to_selection(&mut self) {
-        let selected = self.file_tree_state.borrow().selected_path().map(|p| p.to_path_buf());
+        let selected = self
+            .file_tree_state
+            .borrow()
+            .selected_path()
+            .map(|p| p.to_path_buf());
         let dir = selected.map(|p| {
             let base = if p.is_dir() {
                 p
@@ -1719,7 +1733,11 @@ impl MultiPanelApp {
             if let Some(term) = &mut *self.terminal.borrow_mut() {
                 term.poll();
                 use tui_term::widget::PseudoTerminal;
-                let selected_path = self.file_tree_state.borrow().selected_path().map(|p| p.to_path_buf());
+                let selected_path = self
+                    .file_tree_state
+                    .borrow()
+                    .selected_path()
+                    .map(|p| p.to_path_buf());
                 let term_title = selected_path
                     .as_ref()
                     .map(|p| {
@@ -1853,7 +1871,11 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     let left_fraction = app.left_sidebar_fraction();
     let right_fraction = app.right_sidebar_fraction();
     let header_height = app.header_height();
-    let footer_height = if app.footer_terminal_focus { 0u16 } else { app.footer_height() };
+    let footer_height = if app.footer_terminal_focus {
+        0u16
+    } else {
+        app.footer_height()
+    };
     let show_grid = app.show_grid;
     let chart_mode = app.chart_mode;
     let file_tree_state = app.file_tree_state.clone();
@@ -2039,7 +2061,10 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             let footer_terminal_area = footer_terminal_area.clone();
             let file_tree_state = file_tree_state_for_title.clone();
             move |_state, area, buf| {
-                let selected_path = file_tree_state.borrow().selected_path().map(|p| p.to_path_buf());
+                let selected_path = file_tree_state
+                    .borrow()
+                    .selected_path()
+                    .map(|p| p.to_path_buf());
                 let term_title = selected_path
                     .as_ref()
                     .map(|p| {
@@ -2058,33 +2083,35 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                     .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                     .split(area);
                 *footer_terminal_area.borrow_mut() = Some(halves[1]);
-            Widget::render(
-                Paragraph::new(help).alignment(Alignment::Left),
-                halves[0],
-                buf,
-            );
-            let mut term_guard = terminal_state.borrow_mut();
-            if let Some(term) = term_guard.as_mut() {
-                term.poll();
-                use tui_term::widget::PseudoTerminal;
-                let block = Block::default().borders(Borders::ALL).title(term_title.clone());
-                let inner = block.inner(halves[1]);
-                if inner.width > 0 && inner.height > 0 {
-                    term.resize(inner.height, inner.width);
-                }
-                Widget::render(block, halves[1], buf);
-                if inner.width > 0 && inner.height > 0 {
-                    let pseudo = PseudoTerminal::new(term.parser.screen());
-                    Widget::render(pseudo, inner, buf);
-                }
-            } else {
                 Widget::render(
-                    Paragraph::new("<terminal>").alignment(Alignment::Right),
-                    halves[1],
+                    Paragraph::new(help).alignment(Alignment::Left),
+                    halves[0],
                     buf,
                 );
+                let mut term_guard = terminal_state.borrow_mut();
+                if let Some(term) = term_guard.as_mut() {
+                    term.poll();
+                    use tui_term::widget::PseudoTerminal;
+                    let block = Block::default()
+                        .borders(Borders::ALL)
+                        .title(term_title.clone());
+                    let inner = block.inner(halves[1]);
+                    if inner.width > 0 && inner.height > 0 {
+                        term.resize(inner.height, inner.width);
+                    }
+                    Widget::render(block, halves[1], buf);
+                    if inner.width > 0 && inner.height > 0 {
+                        let pseudo = PseudoTerminal::new(term.parser.screen());
+                        Widget::render(pseudo, inner, buf);
+                    }
+                } else {
+                    Widget::render(
+                        Paragraph::new("<terminal>").alignment(Alignment::Right),
+                        halves[1],
+                        buf,
+                    );
+                }
             }
-        }
         })
         .header_color(color_demo_color.unwrap_or(Color::Blue))
         .left_color(color_demo_color.unwrap_or(Color::Green))
