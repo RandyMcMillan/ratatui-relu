@@ -2527,6 +2527,8 @@ mod tests {
 
     #[test]
     fn transition_matrix_is_consistent() {
+        let result = verify_transition_matrix();
+        println!("transition_matrix_is_consistent result={:?}", result);
         assert!(verify_transition_matrix().is_none());
     }
 }
