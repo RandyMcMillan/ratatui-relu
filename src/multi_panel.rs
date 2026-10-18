@@ -932,6 +932,9 @@ pub struct MultiPanelApp {
     /// Boost flag for the main file view (full-screen).
     #[serde(skip)]
     pub main_boost: bool,
+    /// Whether the right panel is expanded to full width.
+    #[serde(skip)]
+    pub right_full: bool,
     /// Show line numbers in the file view.
     #[serde(default = "default_line_numbers")]
     pub line_numbers: bool,
@@ -977,6 +980,7 @@ impl std::fmt::Debug for MultiPanelApp {
             .field("state", &self.state)
             .field("left_boost", &self.left_boost)
             .field("right_boost", &self.right_boost)
+            .field("right_full", &self.right_full)
             .field("top_boost", &self.top_boost)
             .field("bottom_boost", &self.bottom_boost)
             .field("test_mode", &self.test_mode)
@@ -1089,6 +1093,7 @@ impl MultiPanelApp {
             state,
             left_boost: false,
             right_boost: false,
+            right_full: false,
             top_boost: true,
             bottom_boost: true,
             show_grid: true,
@@ -1530,7 +1535,15 @@ impl MultiPanelApp {
                 } else if right_closed {
                     self.state.left_sidebar.set_target(1.0);
                 } else {
-                    self.state.right_sidebar.toggle_between(0.0, 1.0);
+                    // Right panel is open: cycle boost (normal -> 50% -> 100% -> normal).
+                    if self.right_full {
+                        self.right_full = false;
+                        self.right_boost = false;
+                    } else if self.right_boost {
+                        self.right_full = true;
+                    } else {
+                        self.right_boost = true;
+                    }
                 }
             }
             KeyCode::Left => {
@@ -1816,7 +1829,13 @@ impl MultiPanelApp {
 
     /// Current right sidebar width fraction, including boost.
     pub fn right_sidebar_fraction(&self) -> f64 {
-        if self.right_boost { 0.50 } else { 0.25 }
+        if self.right_full {
+            1.00
+        } else if self.right_boost {
+            0.50
+        } else {
+            0.25
+        }
     }
 
     /// Current header height, including boost.
