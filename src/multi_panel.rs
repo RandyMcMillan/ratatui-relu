@@ -1611,6 +1611,8 @@ impl MultiPanelApp {
                 let widget = (self.config.widget_builder)(self);
                 f.render_stateful_widget(widget, chunks[0], &mut self.state);
             }
+            // Track the terminal area for mouse hit-testing.
+            *self.footer_terminal_area.borrow_mut() = Some(chunks[1]);
             // Render terminal in bottom half.
             Clear.render(chunks[1], f.buffer_mut());
             if let Some(term) = &mut *self.terminal.borrow_mut() {
