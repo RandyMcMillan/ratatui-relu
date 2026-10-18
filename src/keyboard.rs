@@ -177,6 +177,7 @@ pub struct KeyboardState {
     pub last_areas: Vec<Option<Rect>>,
     pub keys: Vec<char>,
     pub last_output: String,
+    pub caps_lock: bool,
 }
 
 impl Default for KeyboardState {
@@ -196,6 +197,7 @@ impl KeyboardState {
             last_areas: vec![None; keys.len()],
             keys,
             last_output: String::new(),
+            caps_lock: false,
         }
     }
 
@@ -238,9 +240,14 @@ impl KeyboardState {
 
         if let Some(i) = clicked {
             if let Some(&key) = self.keys.get(i) {
+                if key == '\x14' {
+                    self.caps_lock = !self.caps_lock;
+                }
                 let action = match key {
                     ' ' => KeyboardAction::Space,
                     '\x08' => KeyboardAction::Backspace,
+                    '\x10' => return None, // Fn: no terminal action
+                    '\u{2318}' => return None, // Cmd: no terminal action
                     '\t' => KeyboardAction::Tab,
                     '\n' => KeyboardAction::Enter,
                     '\x14' => KeyboardAction::Caps,
@@ -255,7 +262,13 @@ impl KeyboardState {
                     c if (c as u32) >= 0xE001 && (c as u32) <= 0xE00C => {
                         KeyboardAction::Function(((c as u32) - 0xE000) as u8)
                     }
-                    _ => KeyboardAction::Char(key),
+                    _ => {
+                        if key.is_alphabetic() && !self.caps_lock {
+                            KeyboardAction::Char(key.to_ascii_lowercase())
+                        } else {
+                            KeyboardAction::Char(key)
+                        }
+                    }
                 };
                 let label = match key {
                     ' ' => "Space".to_string(),
@@ -342,7 +355,17 @@ impl StatefulWidget for KeyboardWidget {
                     c if (c as u32) >= 0xE001 && (c as u32) <= 0xE00C => {
                         format!("F{}", (c as u32) - 0xE000)
                     }
-                    _ => key.to_string(),
+                    _ => {
+                        if key.is_alphabetic() {
+                            if state.caps_lock {
+                                key.to_uppercase().to_string()
+                            } else {
+                                key.to_lowercase().to_string()
+                            }
+                        } else {
+                            key.to_string()
+                        }
+                    }
                 };
                 let base_w: u16 = if *key == ' ' { 15 } else { 5 };
                 let w: u16 = base_w.saturating_mul(scale).max(base_w);
