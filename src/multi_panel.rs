@@ -2000,6 +2000,25 @@ impl MultiPanelApp {
 
     /// Render the app into the given frame using the configured widget builder.
     pub fn render(&mut self, f: &mut Frame) {
+        // Log dimensions to disk for debugging.
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/tmp/ratatui_dims.log")
+        {
+            use std::io::Write;
+            let _ = writeln!(
+                file,
+                "area={}x{} footer_h={} statusbar_h=3 header_h={} footer_boost={} right_boost={} right_full={}",
+                f.area().width,
+                f.area().height,
+                self.footer_height(),
+                self.header_height(),
+                self.bottom_boost,
+                self.right_boost,
+                self.right_full
+            );
+        }
         if self.footer_terminal_focus {
             let area = f.area();
             let chunks = Layout::default()
