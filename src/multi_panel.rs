@@ -1023,6 +1023,9 @@ pub struct MultiPanelApp {
     /// Statusbar area (for mouse hit-testing; clicks here are ignored).
     #[serde(skip)]
     pub statusbar_area: Rc<RefCell<Option<Rect>>>,
+    /// Full terminal area (for dimension display).
+    #[serde(skip)]
+    pub terminal_area: Rc<RefCell<Option<Rect>>>,
     /// Statusbar state-bits area (clicking here copies the bits to clipboard).
     #[serde(skip)]
     pub statusbar_bits_area: Rc<RefCell<Option<Rect>>>,    /// Whether the footer terminal has focus.
@@ -1260,6 +1263,7 @@ impl MultiPanelApp {
             footer_terminal_area: Rc::new(RefCell::new(None)),
             statusbar_area: Rc::new(RefCell::new(None)),
             statusbar_bits_area: Rc::new(RefCell::new(None)),
+            terminal_area: Rc::new(RefCell::new(None)),
             footer_terminal_focus: false,
             selected_file: None,
             file_preview: String::new(),
@@ -2047,6 +2051,7 @@ impl MultiPanelApp {
 
     /// Render the app into the given frame using the configured widget builder.
     pub fn render(&mut self, f: &mut Frame) {
+        *self.terminal_area.borrow_mut() = Some(f.area());
         // Log dimensions to disk for debugging.
         if let Ok(mut file) = std::fs::OpenOptions::new()
             .create(true)
@@ -2730,6 +2735,7 @@ pub fn make_statusbar_content(
         .unwrap_or(false);
     let statusbar_area = app.statusbar_area.clone();
     let statusbar_bits_area = app.statusbar_bits_area.clone();
+    let terminal_area = app.terminal_area.clone();
     move |_state, area, buf| {
         *statusbar_area.borrow_mut() = Some(area);
         let halves = Layout::default()
@@ -2742,12 +2748,19 @@ pub fn make_statusbar_content(
             halves[0],
             buf,
         );
-        let bits_widget = if bits_flashing {
-            Paragraph::new("copied!")
-                .alignment(Alignment::Right)
-                .fg(Color::Green)
+        let (tw, th) = terminal_area
+            .borrow()
+            .map(|r| (r.width, r.height))
+            .unwrap_or((area.width, area.height));
+        let right_text = if bits_flashing {
+            "copied!".to_string()
         } else {
-            Paragraph::new(format!("{:08b}", state_bits)).alignment(Alignment::Right)
+            format!("{:08b}  {}x{}", state_bits, tw, th)
+        };
+        let bits_widget = if bits_flashing {
+            Paragraph::new(right_text).alignment(Alignment::Right).fg(Color::Green)
+        } else {
+            Paragraph::new(right_text).alignment(Alignment::Right)
         };
         Widget::render(bits_widget, halves[1], buf);
     }
