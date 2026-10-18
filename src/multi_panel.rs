@@ -188,7 +188,7 @@ impl MultiPanel {
             // left_header center_header right_header
             // right_header text update to current state bits 00000000
             header_title: "Header".to_string(),
-            left_title: "Left".to_string(),
+            left_title: "Files".to_string(),
             right_title: "Right".to_string(),
             main_title: "Main".to_string(),
             footer_title: "Footer".to_string(),
@@ -2016,7 +2016,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
 
     MultiPanel::new()
         .header_title("Header")
-        .left_title("Left")
+        .left_title("Files")
         .right_title(
             selected_file
                 .as_ref()
