@@ -2352,36 +2352,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                 Clear.render(area, buf);
             }
         })
-        .statusbar_content({
-            let state_bits = state_bits(app);
-            let bits_flashing = app
-                .bits_flash_until
-                .map(|t| std::time::Instant::now() < t)
-                .unwrap_or(false);
-            let statusbar_area = app.statusbar_area.clone();
-            let statusbar_bits_area = app.statusbar_bits_area.clone();
-            move |_state, area, buf| {
-                *statusbar_area.borrow_mut() = Some(area);
-                let halves = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                    .split(area);
-                *statusbar_bits_area.borrow_mut() = Some(halves[1]);
-                Widget::render(
-                    Paragraph::new(help).alignment(Alignment::Left),
-                    halves[0],
-                    buf,
-                );
-                let bits_widget = if bits_flashing {
-                    Paragraph::new("copied!")
-                        .alignment(Alignment::Right)
-                        .fg(Color::Green)
-                } else {
-                    Paragraph::new(format!("{:08b}", state_bits)).alignment(Alignment::Right)
-                };
-                Widget::render(bits_widget, halves[1], buf);
-            }
-        })
+        .statusbar_content(make_statusbar_content(help.to_string(), app))
         .footer_content({
             let terminal_state = terminal_state.clone();
             let footer_terminal_area = footer_terminal_area.clone();
@@ -2544,10 +2515,7 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
                 }
             }
         })
-        .statusbar_content(|_state, area, buf| {
-            let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
-            Widget::render(p, area, buf);
-        })
+        .statusbar_content(make_statusbar_content("Settings".to_string(), _app))
         .footer_content(|_state, area, buf| {
             let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
             //Widget::render(p, area, buf);
@@ -2622,11 +2590,47 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .right_color(Color::Magenta)
         .main_color(Color::Reset)
         .statusbar_color(Color::Yellow)
+        .statusbar_content(make_statusbar_content("Help".to_string(), _app))
         .footer_color(Color::Yellow)
         .panel_height(1)
         .sidebar_width_fraction(0.25)
         .left_sidebar_min_width(0)
         .right_sidebar_min_width(0)
+}
+
+/// Build a reusable statusbar content closure from the given help text and app.
+pub fn make_statusbar_content(
+    help: String,
+    app: &MultiPanelApp,
+) -> impl Fn(&mut MultiPanelState, Rect, &mut Buffer) + 'static {
+    let state_bits = state_bits(app);
+    let bits_flashing = app
+        .bits_flash_until
+        .map(|t| std::time::Instant::now() < t)
+        .unwrap_or(false);
+    let statusbar_area = app.statusbar_area.clone();
+    let statusbar_bits_area = app.statusbar_bits_area.clone();
+    move |_state, area, buf| {
+        *statusbar_area.borrow_mut() = Some(area);
+        let halves = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(area);
+        *statusbar_bits_area.borrow_mut() = Some(halves[1]);
+        Widget::render(
+            Paragraph::new(help.clone()).alignment(Alignment::Left),
+            halves[0],
+            buf,
+        );
+        let bits_widget = if bits_flashing {
+            Paragraph::new("copied!")
+                .alignment(Alignment::Right)
+                .fg(Color::Green)
+        } else {
+            Paragraph::new(format!("{:08b}", state_bits)).alignment(Alignment::Right)
+        };
+        Widget::render(bits_widget, halves[1], buf);
+    }
 }
 
 /// Encode panel targets and boost flags into an 8-bit state vector.
