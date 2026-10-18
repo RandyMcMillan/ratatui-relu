@@ -1478,13 +1478,14 @@ impl MultiPanelApp {
             // G = Grid Mode
             KeyCode::Char('G') => self.show_grid = !self.show_grid,
             // Color demo
-            KeyCode::Char('C') => { self.color_demo = !self.color_demo }, // TODO
+            KeyCode::Char('C') => self.color_demo = !self.color_demo, // TODO
             // Chart mode
-            KeyCode::Char('M') => { self.chart_mode = !self.chart_mode }, // TODO
+            KeyCode::Char('M') => self.chart_mode = !self.chart_mode, // TODO
             KeyCode::Char(' ') => self.state.toggle_all(),
-            KeyCode::Char('n') => self.line_numbers = !self.line_numbers, // TODO
-                                                                          // format blame line
-                                                                          // numbers
+            // TODO
+            // format blame line
+            // numbers
+            KeyCode::Char('n') => self.line_numbers = !self.line_numbers,
             KeyCode::Char('x') => {
                 self.footer_terminal_focus = true;
                 self.terminal_cd_to_selection();
