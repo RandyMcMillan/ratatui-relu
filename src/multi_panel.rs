@@ -1576,8 +1576,8 @@ impl MultiPanelApp {
                     // Right panel is open: cycle boost (normal -> 50% -> 100% -> normal).
                     if self.right_full {
                         self.right_full = false;
-                        self.right_boost = false;
                     } else if self.right_boost {
+                        self.right_boost = false;
                         self.right_full = true;
                     } else {
                         self.right_boost = true;
