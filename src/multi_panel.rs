@@ -1482,6 +1482,10 @@ impl MultiPanelApp {
             KeyCode::Char('x') => {
                 self.footer_terminal_focus = true;
                 self.terminal_cd_to_selection();
+            }
+            KeyCode::Char(':') => {
+                self.footer_terminal_focus = true;
+                self.terminal_cd_to_selection();
             } // File tree navigation in the left panel.
             KeyCode::Char('j') => {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Down);
