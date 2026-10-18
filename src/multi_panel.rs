@@ -847,15 +847,6 @@ impl StatefulWidget for StateHelpTable {
             return;
         }
 
-        let sections = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(1), Constraint::Min(4)])
-            .split(area);
-
-        let bits_line =
-            Paragraph::new(format!("State bits: {:08b}", self.bits)).alignment(Alignment::Center);
-        Widget::render(bits_line, sections[0], buf);
-
         let rows = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -865,7 +856,7 @@ impl StatefulWidget for StateHelpTable {
                 Constraint::Ratio(1, 5),
                 Constraint::Ratio(1, 5),
             ])
-            .split(sections[1]);
+            .split(area);
 
         let mut render_cell = |i: usize, area: Rect| {
             let (cell, label, is_on) = &self.cells[i];
