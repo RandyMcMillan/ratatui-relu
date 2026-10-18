@@ -1047,7 +1047,7 @@ impl MultiPanelApp {
             // Always rescan the working directory so the tree reflects new/removed files.
             let fresh = default_file_tree_paths();
             app.file_tree_state.borrow_mut().set_paths(fresh);
-            // Restore persisted collapse/selection/scroll state onto the fresh tree.
+            // Restore persisted selection/scroll state (expand/collapse not persisted).
             if !app.file_tree_data.paths().is_empty() {
                 app.file_tree_state
                     .borrow_mut()
@@ -1061,6 +1061,10 @@ impl MultiPanelApp {
             }
             if app.git.is_none() {
                 app.git = GitState::new();
+            }
+            if let (Some(git), Some(path)) = (&mut app.git, app.selected_file.clone()) {
+                git.fetch_diff(&path);
+                git.fetch_blame(&path);
             }
             if app.terminal.borrow().is_none() {
                 *app.terminal.borrow_mut() = TerminalState::new();
@@ -1940,7 +1944,13 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     MultiPanel::new()
         .header_title("Header")
         .left_title("Left")
-        .right_title("Right")
+        .right_title(
+            selected_file
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "Right".to_string()),
+        )
         .main_title("")
         .footer_title("")
         .header_content(move |_state, area, buf| {
