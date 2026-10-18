@@ -36,6 +36,8 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Re
 fn main() -> io::Result<()> {
     let mut terminal = setup_terminal()?;
     let mut app = MultiPanelApp::new();
+    // Make an initial write so the state file exists.
+    let _ = app.save();
     let result = run_app(&mut terminal, &mut app);
     // Persist the panel state on exit. Ignore save errors so the terminal is
     // always restored cleanly.
@@ -141,6 +143,19 @@ fn run_app(
                             app.main_scroll = app.main_scroll.saturating_sub(10);
                         } else {
                             app.main_scroll = app.main_scroll.saturating_add(10);
+                        }
+                    } else if app.show_settings && key.code == crossterm::event::KeyCode::Char('e') {
+                        let path = MultiPanelApp::default_config_path();
+                        if let Some(path) = path {
+                            disable_mouse_capture()?;
+                            disable_raw_mode()?;
+                            terminal.backend_mut().execute(LeaveAlternateScreen)?;
+                            let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+                            let _ = std::process::Command::new(&editor).arg(&path).status();
+                            stdout().execute(EnterAlternateScreen)?;
+                            enable_raw_mode()?;
+                            enable_mouse_capture()?;
+                            terminal.clear()?;
                         }
                     } else if key.code == crossterm::event::KeyCode::Char('e') {
                         if let Some(path) = app.selected_file.clone() {

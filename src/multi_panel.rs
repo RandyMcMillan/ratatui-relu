@@ -996,6 +996,9 @@ pub struct MultiPanelApp {
     pub right_boost: bool,
     pub top_boost: bool,
     pub bottom_boost: bool,
+    /// Persisted 8-bit state vector as a binary string (derived from state + boosts).
+    #[serde(default)]
+    pub state_bits: String,
     /// Whether the inner neighbor-report grid is visible.
     #[serde(default = "default_show_grid")]
     pub show_grid: bool,
@@ -1192,6 +1195,11 @@ impl MultiPanelApp {
                     git.fetch_blame(&path);
                 }
             }
+            if !app.state_bits.is_empty() {
+                if let Ok(sb) = u8::from_str_radix(&app.state_bits, 2) {
+                    set_state_bits(&mut app, sb);
+                }
+            }
             if app.terminal.borrow().is_none() {
                 *app.terminal.borrow_mut() = TerminalState::new();
             }
@@ -1239,6 +1247,7 @@ impl MultiPanelApp {
             right_boost: false,
             right_full: false,
             top_boost: true,
+            state_bits: String::new(),
             bottom_boost: true,
             show_grid: true,
             file_tree_state: Rc::new(RefCell::new(FileTreeState::from_paths(
@@ -1292,6 +1301,7 @@ impl MultiPanelApp {
     /// Save app state to the configured path, or the default location.
     pub fn save(&mut self) -> std::io::Result<()> {
         self.file_tree_data = self.file_tree_state.borrow().snapshot();
+        self.state_bits = format!("{:08b}", state_bits(self));
         let path = self
             .config
             .save_path
@@ -2502,10 +2512,11 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
 pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
     let left_text = "\n\n    l/a/q/p: left panel\n    r/u: right panel\n    f/h: footer\n    t: header\n    Space: all panels\n    n: line numbers\n    e: open in editor";
     let right_text = format!(
-        "\n\n    Press \\ again for help\n    Esc/q to close\n\n    State path:\n    {}",
+        "\n\n    Press \\ again for help\n    Esc/q to close\n\n    State path:\n    {}\n\n    State bits: {:08b}",
         MultiPanelApp::default_config_path()
             .map(|p| p.display().to_string())
-            .unwrap_or_else(|| "unknown".to_string())
+            .unwrap_or_else(|| "unknown".to_string()),
+        state_bits(_app)
     );
     let line_width = |text: &str| {
         text.lines()
