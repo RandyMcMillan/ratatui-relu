@@ -2028,7 +2028,8 @@ impl MultiPanelApp {
             use std::io::Write;
             let _ = writeln!(
                 file,
-                "area={}x{} footer_h={} statusbar_h=3 header_h={} footer_boost={} right_boost={} right_full={}",
+                "[{:?}] area={}x{} footer_h={} statusbar_h=3 header_h={} footer_boost={} right_boost={} right_full={}",
+                std::time::SystemTime::now(),
                 f.area().width,
                 f.area().height,
                 self.footer_height(),
