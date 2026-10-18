@@ -427,8 +427,8 @@ impl StatefulWidget for MultiPanel {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let header_height = (state.header.current() * self.header_height as f64).round() as u16;
-        let statusbar_height = 3_u16; //(state.footer.current() * self.footer_height as f64).round() as u16;
-        let footer_height = (state.footer.current() * self.footer_height as f64).round() as u16;
+        let statusbar_height = 3_u16;
+        let footer_height = (state.footer.current() * (area.height.saturating_sub(statusbar_height) / 2) as f64).round() as u16;
         let left_width =
             ((state.left_sidebar.current() * area.width as f64 * self.left_sidebar_width_fraction)
                 .round() as u16)
@@ -2472,6 +2472,8 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
             let table = StateHelpTable::new(_app);
             let table_state = _app.state_help_table_state.clone();
             let show_state_table = _app.show_state_table;
+            let show_keyboard = _app.show_keyboard;
+            let keyboard_state = _app.keyboard_state.clone();
             let bits = state_bits(_app);
             let rows = [
                 ("7", "Top (header)", if (bits >> 7) & 1 == 1 { "1" } else { "0" }, if (bits >> 7) & 1 == 1 { "open" } else { "closed" }),
@@ -2490,7 +2492,20 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
                 decode_text.push_str(&format!("{:<4}{:<18}{:<7}{}\n", bit, name, value, meaning));
             }
             move |_state, area, buf| {
-                if show_state_table {
+                if show_keyboard {
+                    // Hide shortcuts; toggles remain, keyboard is in the footer.
+                    let toggles_block = Block::bordered()
+                        .title("Toggles")
+                        .title_alignment(Alignment::Left);
+                    let toggles_inner = toggles_block.inner(area);
+                    Widget::render(toggles_block, area, buf);
+                    StatefulWidget::render(
+                        table.clone(),
+                        toggles_inner,
+                        buf,
+                        &mut table_state.borrow_mut(),
+                    );
+                } else if show_state_table {
                     // Interactive table view with cells/buttons for each bit.
                     StatefulWidget::render(
                         table.clone(),
@@ -2552,7 +2567,7 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .statusbar_color(Color::Yellow)
         .footer_color(Color::Yellow)
         .panel_height(3)
-        .footer_height(12)
+        .footer_height(50)
         .sidebar_width_fraction(0.25)
         .left_sidebar_min_width(line_width(left_text))
         .right_sidebar_min_width(line_width(right_text))
