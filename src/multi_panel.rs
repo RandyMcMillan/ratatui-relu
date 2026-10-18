@@ -1414,8 +1414,10 @@ impl MultiPanelApp {
             KeyCode::Char('M') => self.chart_mode = !self.chart_mode,
             KeyCode::Char(' ') => self.state.toggle_all(),
             KeyCode::Char('n') => self.line_numbers = !self.line_numbers,
-            KeyCode::Char('x') => self.footer_terminal_focus = true,
-            // File tree navigation in the left panel.
+            KeyCode::Char('x') => {
+                self.footer_terminal_focus = true;
+                self.terminal_cd_to_selection();
+            }            // File tree navigation in the left panel.
             KeyCode::Char('j') => {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Down);
             }
@@ -1540,9 +1542,15 @@ impl MultiPanelApp {
             // Terminal view
             (KeyCode::Char('f'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_terminal = !self.show_terminal;
+                if self.show_terminal {
+                    self.terminal_cd_to_selection();
+                }
             }
             (KeyCode::Char('x'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_terminal = !self.show_terminal;
+                if self.show_terminal {
+                    self.terminal_cd_to_selection();
+                }
             }
             _ => self.handle_key(key.code),
         }
@@ -1579,16 +1587,40 @@ impl MultiPanelApp {
 
         // Footer terminal focus on click.
         if let crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) = event.kind {
-            if let Some(area) = *self.footer_terminal_area.borrow() {
+            let area_opt = *self.footer_terminal_area.borrow();
+            if let Some(area) = area_opt {
                 if area.x <= event.column
                     && event.column < area.x + area.width
                     && area.y <= event.row
                     && event.row < area.y + area.height
                 {
                     self.footer_terminal_focus = true;
+                    self.terminal_cd_to_selection();
                 } else {
                     self.footer_terminal_focus = false;
                 }
+            }
+        }
+    }
+
+    /// Send a `cd` to the embedded terminal so it opens in the directory
+    /// currently selected in the file tree (or its parent when a file is
+    /// selected).
+    pub fn terminal_cd_to_selection(&mut self) {
+        let dir = self.selected_file.as_ref().map(|p| {
+            if p.is_dir() {
+                p.clone()
+            } else {
+                p.parent()
+                    .map(|parent| parent.to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("."))
+            }
+        });
+        if let Some(dir) = dir {
+            let quoted = format!("'{}'", dir.display().to_string().replace('\'', "'\\''"));
+            let cmd = format!("cd {}\n", quoted);
+            if let Some(term) = &mut *self.terminal.borrow_mut() {
+                term.write_input(cmd.as_bytes());
             }
         }
     }
