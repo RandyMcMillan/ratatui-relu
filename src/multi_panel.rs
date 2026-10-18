@@ -1743,6 +1743,8 @@ impl MultiPanelApp {
                     self.show_help = false;
                     self.show_settings = false;
                     self.show_terminal = false;
+                    self.show_keyboard = false;
+                    self.footer_terminal_focus = false;
                 }
                 crossterm::event::KeyCode::Char('\\') => {
                     // toggle settings only
@@ -1901,6 +1903,11 @@ impl MultiPanelApp {
                     return;
                 }
             }
+        }
+
+        // Ignore footer-terminal focus handling while settings is open.
+        if self.show_settings {
+            return;
         }
 
         // Footer terminal focus on click.
