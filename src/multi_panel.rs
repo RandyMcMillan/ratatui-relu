@@ -1738,7 +1738,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     let left_fraction = app.left_sidebar_fraction();
     let right_fraction = app.right_sidebar_fraction();
     let header_height = app.header_height();
-    let footer_height = if app.footer_terminal_focus { 20u16 } else { app.footer_height() };
+    let footer_height = if app.footer_terminal_focus { 0u16 } else { app.footer_height() };
     let show_grid = app.show_grid;
     let chart_mode = app.chart_mode;
     let file_tree_state = app.file_tree_state.clone();
