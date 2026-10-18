@@ -1354,6 +1354,17 @@ impl MultiPanelApp {
             // Keep the embedded terminal's working directory in sync with the
             // file tree selection.
             self.terminal_cd_to_selection();
+            if matches!(
+                code,
+                KeyCode::Up
+                    | KeyCode::Down
+                    | KeyCode::Home
+                    | KeyCode::End
+                    | KeyCode::PageUp
+                    | KeyCode::PageDown
+            ) {
+                self.load_selected_file();
+            }
             return;
         }
 
@@ -1432,10 +1443,12 @@ impl MultiPanelApp {
             KeyCode::Char('j') => {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Down);
                 self.terminal_cd_to_selection();
+                self.load_selected_file();
             }
             KeyCode::Char('k') => {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Up);
                 self.terminal_cd_to_selection();
+                self.load_selected_file();
             }
             KeyCode::Char('h') => {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Left);
@@ -1621,6 +1634,36 @@ impl MultiPanelApp {
     /// Send a `cd` to the embedded terminal so it opens in the directory
     /// currently selected in the file tree (or its parent when a file is
     /// selected).
+    /// Load the currently selected file (if any) from the file tree into the
+    /// main view, mirroring the Enter/Right behaviour.
+    pub fn load_selected_file(&mut self) {
+        let selected = self
+            .file_tree_state
+            .borrow()
+            .selected_path()
+            .map(|p| p.to_path_buf());
+        if let Some(path) = selected.filter(|p| p.is_file()) {
+            self.selected_file = Some(path.clone());
+            let content = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| format!("Error reading file: {}", e));
+            self.file_preview = if content.len() > 100_000 {
+                let mut t = content[..100_000].to_string();
+                t.push_str("\n... (truncated)");
+                t
+            } else {
+                content
+            };
+            self.main_scroll = self
+                .selected_file
+                .as_ref()
+                .and_then(|p| self.file_view_scrolls.get(p).copied())
+                .unwrap_or(0);
+            if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
+                git.fetch_diff(&path);
+            }
+        }
+    }
+
     pub fn terminal_cd_to_selection(&mut self) {
         let selected = self.file_tree_state.borrow().selected_path().map(|p| p.to_path_buf());
         let dir = selected.map(|p| {
