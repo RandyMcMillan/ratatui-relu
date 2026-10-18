@@ -21,6 +21,8 @@ pub struct GitState {
     pub status_items: Vec<StatusItem>,
     pub diff: Option<(DiffParams, FileDiff)>,
     pub diff_path: Option<PathBuf>,
+    pub blame: Option<String>,
+    pub blame_path: Option<PathBuf>,
     last_status: Instant,
 }
 
@@ -50,6 +52,8 @@ impl GitState {
             status_items: Vec::new(),
             diff: None,
             diff_path: None,
+            blame: None,
+            blame_path: None,
             last_status: Instant::now(),
         };
 
@@ -94,6 +98,21 @@ impl GitState {
             options: DiffOptions::default(),
         };
         let _ = self.async_diff.request(params);
+    }
+
+    /// Synchronously fetch `git blame` for the given file.
+    pub fn fetch_blame(&mut self, path: &std::path::Path) {
+        self.blame_path = Some(path.to_path_buf());
+        let output = std::process::Command::new("git")
+            .args(["blame", "--", &path.to_string_lossy()])
+            .output();
+        self.blame = output.ok().and_then(|o| {
+            if o.status.success() {
+                String::from_utf8(o.stdout).ok()
+            } else {
+                None
+            }
+        });
     }
 
     pub fn status_for(&self, path: &std::path::Path) -> Option<StatusItemType> {

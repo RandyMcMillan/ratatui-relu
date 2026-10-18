@@ -1493,6 +1493,15 @@ impl MultiPanelApp {
             KeyCode::Right => {
                 let right_closed = self.state.right_sidebar.target() < 0.5;
                 let left_open = self.state.left_sidebar.target() > 0.5;
+                // When a file is open and the left panel is closed, Right opens
+                // the right panel and loads git blame for the file.
+                if (self.main_active || self.selected_file.is_some()) && !left_open {
+                    self.state.right_sidebar.set_target(1.0);
+                    if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
+                        git.fetch_blame(&path);
+                    }
+                    return;
+                }
                 if right_closed && left_open {
                     self.left_boost = !self.left_boost;
                 } else if right_closed {
@@ -1883,6 +1892,17 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             out
         })
         .filter(|s| !s.trim().is_empty());
+    let git_blame_text = app
+        .git
+        .as_ref()
+        .and_then(|g| {
+            if g.blame_path.as_ref() == selected_file.as_ref() {
+                g.blame.clone()
+            } else {
+                None
+            }
+        })
+        .filter(|s| !s.trim().is_empty());
     let color_demo_color = app.color_demo_transition.as_ref().map(|ct| ct.current());
     let test_bits = app.test_mode.as_ref().map(|_| state_bits(app));
     let test_label = app.test_mode.as_ref().map(|t| {
@@ -1915,9 +1935,19 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                 StatefulWidget::render(widget, area, buf, &mut state);
             }
         })
-        .right_content(|_state, area, buf| {
-            let p = Paragraph::new("right →").alignment(Alignment::Right);
-            Widget::render(p, area, buf);
+        .right_content({
+            let git_blame_text = git_blame_text.clone();
+            move |_state, area, buf| {
+                if let Some(blame) = &git_blame_text {
+                    let p = Paragraph::new(blame.clone())
+                        .wrap(ratatui::widgets::Wrap { trim: false })
+                        .scroll((0, 0));
+                    Widget::render(p, area, buf);
+                } else {
+                    let p = Paragraph::new("right →").alignment(Alignment::Right);
+                    Widget::render(p, area, buf);
+                }
+            }
         })
         .main_content(move |state, area, buf| {
             use crate::chart::ChartDemo;
