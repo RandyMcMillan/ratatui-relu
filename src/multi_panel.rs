@@ -1353,7 +1353,11 @@ impl MultiPanelApp {
             }
 
             if code == KeyCode::Enter {
-                let selected = self.file_tree_state.borrow().selected_path().map(|p| p.to_path_buf());
+                let selected = self
+                    .file_tree_state
+                    .borrow()
+                    .selected_path()
+                    .map(|p| p.to_path_buf());
                 if let Some(path) = selected {
                     self.selected_file = Some(path.clone());
                     let content = std::fs::read_to_string(&path)
@@ -1402,7 +1406,11 @@ impl MultiPanelApp {
 
         // Load the selected file into the main panel on Enter (left closed).
         if matches!(code, KeyCode::Enter) {
-            let selected = self.file_tree_state.borrow().selected_path().map(|p| p.to_path_buf());
+            let selected = self
+                .file_tree_state
+                .borrow()
+                .selected_path()
+                .map(|p| p.to_path_buf());
             if let Some(path) = selected {
                 self.selected_file = Some(path.clone());
                 let content = std::fs::read_to_string(&path)
