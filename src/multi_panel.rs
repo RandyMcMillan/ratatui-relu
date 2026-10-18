@@ -1436,23 +1436,31 @@ impl MultiPanelApp {
             return;
         }
 
-        // Data-driven panel toggle keys (symmetrical: 'l' and 'a' both toggle left).
+        // Data-driven panel toggle keys
+        // Example (symmetrical: 'l' and 'a' both toggle left).
         const PANEL_TOGGLE_KEYS: &[(char, usize)] = &[
-            ('t', 0),
-            ('l', 1),
-            ('a', 1),
-            ('q', 1),
-            ('p', 1),
-            ('r', 2),
-            ('u', 2),
-            ('f', 3),
-            ('h', 3),
+            //        // top
+            ('t', 0), // y
+            ('y', 0), // t
+            //        // left
+            ('l', 1), // a
+            ('a', 1), // l
+            //        //
+            ('q', 1), // p
+            ('p', 1), // q
+            //        // right
+            ('r', 2), // u
+            ('u', 2), // r
+            //        // footer
+            ('f', 3), // h
+            ('h', 3), // f
+            ('g', usize::MAX), // center of keyboard
         ];
         if let KeyCode::Char(c) = code
             && let Some((_, panel)) = PANEL_TOGGLE_KEYS.iter().find(|(k, _)| *k == c)
         {
             match panel {
-                0 => self.state.header.toggle_between(0.0, 1.0),
+                0 => self.state.header.toggle_between(0.0, 1.0), // top
                 1 => {
                     self.state.left_sidebar.toggle_between(0.0, 1.0);
                     if self.state.left_sidebar.target() > 0.5 {
