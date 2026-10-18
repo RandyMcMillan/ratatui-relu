@@ -437,8 +437,8 @@ impl StatefulWidget for MultiPanel {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(header_height),
-                Constraint::Min(10_u16),
-                Constraint::Length(statusbar_height), // statusbar // persistent in all states
+                Constraint::Min(0),
+                Constraint::Length(statusbar_height),
                 Constraint::Length(footer_height),
             ])
             .split(area);
@@ -447,7 +447,7 @@ impl StatefulWidget for MultiPanel {
             .direction(Direction::Horizontal)
             .constraints([
                 Constraint::Length(left_width),
-                Constraint::Min(10_u16),
+                Constraint::Min(0),
                 Constraint::Length(right_width),
             ])
             .split(vertical[1]);
@@ -498,7 +498,7 @@ impl StatefulWidget for MultiPanel {
         render_panel(
             buf,
             &self.footer_title,
-            vertical[2], // last in
+            vertical[3], // last in
             self.footer_color,
             state,
             self.footer_content.as_deref(),
@@ -2366,9 +2366,9 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                                 .map(|x| x.to_path_buf())
                                 .unwrap_or_else(|| std::path::PathBuf::from("."))
                         };
-                        format!("Terminal - {}", dir.display())
+                        format!("1923:Terminal - {}", dir.display())
                     })
-                    .unwrap_or_else(|| "Terminal".to_string());
+                    .unwrap_or_else(|| "1921:Terminal".to_string());
                 let halves = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
