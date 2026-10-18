@@ -1208,7 +1208,7 @@ impl MultiPanelApp {
             }
             app.settings_state = {
                 let mut s = MultiPanelState::open(8.0);
-                s.footer.set_target(0.0);
+                s.footer.set_target(1.0);
                 s
             };
             if app.keyboard_state.borrow().keys.is_empty() {
@@ -1243,7 +1243,7 @@ impl MultiPanelApp {
             state,
             settings_state: {
                 let mut s = MultiPanelState::open(8.0);
-                s.footer.set_target(0.0);
+                s.footer.set_target(1.0);
                 s
             },
             left_boost: false,
@@ -1276,7 +1276,7 @@ impl MultiPanelApp {
             show_settings: false,
             show_terminal: false,
             show_state_table: false,
-            show_keyboard: false,
+            show_keyboard: true,
             file_tree_focus: true,
             color_demo: false,
             color_demo_transition: None,
@@ -1784,6 +1784,8 @@ impl MultiPanelApp {
     /// (arrow keys used by test mode) should keep using [`Self::handle_key`].
     pub fn handle_key_event(&mut self, key: crossterm::event::KeyEvent) {
         use crossterm::event::KeyModifiers;
+        // Highlight the pressed key on the on-screen keyboard.
+        self.keyboard_state.borrow_mut().press_key(key.code);
         // Help/Settings overlays have their own key handling.
         if self.show_help || self.show_settings {
             match key.code {

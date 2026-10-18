@@ -144,7 +144,7 @@ impl<'a> Button<'a> {
         match self.state {
             ButtonState::Normal => (theme.background, theme.text, theme.shadow, theme.highlight),
             ButtonState::Selected => (theme.highlight, theme.text, theme.shadow, theme.highlight),
-            ButtonState::Active => (theme.background, theme.text, theme.highlight, theme.shadow),
+            ButtonState::Active => (theme.background, Color::White, theme.highlight, theme.shadow),
         }
     }
 }
@@ -161,10 +161,11 @@ impl Widget for Button<'_> {
         buf.set_style(area, Style::new().bg(background).fg(text));
         ratatui::widgets::Widget::render(block, area, buf);
         if inner.width > 0 && inner.height > 0 {
+            let label = self.label.style(Style::new().fg(text));
             buf.set_line(
-                inner.x + (inner.width.saturating_sub(self.label.width() as u16)) / 2,
+                inner.x + (inner.width.saturating_sub(label.width() as u16)) / 2,
                 inner.y + (inner.height.saturating_sub(1)) / 2,
-                &self.label,
+                &label,
                 inner.width,
             );
         }
@@ -178,6 +179,8 @@ pub struct KeyboardState {
     pub keys: Vec<char>,
     pub last_output: String,
     pub caps_lock: bool,
+    pub last_pressed: Option<char>,
+    pub last_pressed_at: Option<std::time::Instant>,
 }
 
 impl Default for KeyboardState {
@@ -198,6 +201,39 @@ impl KeyboardState {
             keys,
             last_output: String::new(),
             caps_lock: false,
+            last_pressed: None,
+            last_pressed_at: None,
+        }
+    }
+
+    /// Highlight the key matching `code` (used when a real key is pressed).
+    pub fn press_key(&mut self, code: crossterm::event::KeyCode) {
+        use crossterm::event::KeyCode;
+        for bs in &mut self.button_states {
+            *bs = ButtonState::Normal;
+        }
+        let target = match code {
+            KeyCode::Char(c) => c,
+            KeyCode::Enter => '\n',
+            KeyCode::Tab => '\t',
+            KeyCode::Backspace => '\x08',
+            KeyCode::Esc => '\x1b',
+            KeyCode::Left => '\x1c',
+            KeyCode::Down => '\x1d',
+            KeyCode::Right => '\x1a',
+            KeyCode::Up => '↑',
+            KeyCode::F(n) => char::from_u32(0xE000 + n as u32).unwrap_or(' '),
+            _ => return,
+        };
+        self.last_pressed = Some(target);
+        self.last_pressed_at = Some(std::time::Instant::now());
+        for (i, &k) in self.keys.iter().enumerate() {
+            if k == target || k.to_ascii_lowercase() == target.to_ascii_lowercase() {
+                if let Some(bs) = self.button_states.get_mut(i) {
+                    *bs = ButtonState::Active;
+                }
+                break;
+            }
         }
     }
 
@@ -320,6 +356,31 @@ impl StatefulWidget for KeyboardWidget {
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let mut y = area.y;
         let mut idx = 0usize;
+
+        // Expire the highlight after 200ms.
+        let expired = state
+            .last_pressed_at
+            .map(|t| t.elapsed().as_millis() > 200)
+            .unwrap_or(true);
+        if expired {
+            for bs in &mut state.button_states {
+                *bs = ButtonState::Normal;
+            }
+            state.last_pressed = None;
+            state.last_pressed_at = None;
+        } else if let Some(pressed) = state.last_pressed {
+            for bs in &mut state.button_states {
+                *bs = ButtonState::Normal;
+            }
+            for (i, &k) in state.keys.iter().enumerate() {
+                if k == pressed || k.to_ascii_lowercase() == pressed.to_ascii_lowercase() {
+                    if let Some(bs) = state.button_states.get_mut(i) {
+                        *bs = ButtonState::Active;
+                    }
+                    break;
+                }
+            }
+        }
 
         for row in &self.rows {
             let base_row_width: u16 = row
