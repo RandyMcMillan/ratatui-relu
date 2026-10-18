@@ -1650,7 +1650,17 @@ impl MultiPanelApp {
             if let Some(term) = &mut *self.terminal.borrow_mut() {
                 term.poll();
                 use tui_term::widget::PseudoTerminal;
-                let block = Block::default().borders(Borders::ALL).title("Terminal");
+                let term_title = self
+                    .selected_file
+                    .as_ref()
+                    .map(|p| {
+                        let dir = if p.is_dir() { p.clone() } else {
+                            p.parent().map(|x| x.to_path_buf()).unwrap_or_else(|| std::path::PathBuf::from("."))
+                        };
+                        format!("$ {}", dir.display())
+                    })
+                    .unwrap_or_else(|| "Terminal".to_string());
+                let block = Block::default().borders(Borders::ALL).title(term_title);
                 let inner = block.inner(chunks[1]);
                 if inner.width > 0 && inner.height > 0 {
                     term.resize(inner.height, inner.width);
@@ -1787,6 +1797,19 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     };
     let terminal_state = app.terminal.clone();
     let footer_terminal_area = app.footer_terminal_area.clone();
+    let term_title = selected_file
+        .as_ref()
+        .map(|p| {
+            let dir = if p.is_dir() {
+                p.clone()
+            } else {
+                p.parent()
+                    .map(|x| x.to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("."))
+            };
+            format!("$ {}", dir.display())
+        })
+        .unwrap_or_else(|| "Terminal".to_string());
     let git_diff_text = app
         .git
         .as_ref()
@@ -1932,6 +1955,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         .footer_content({
             let terminal_state = terminal_state.clone();
             let footer_terminal_area = footer_terminal_area.clone();
+            let term_title = term_title.clone();
             move |_state, area, buf| {
                 let halves = Layout::default()
                     .direction(Direction::Horizontal)
@@ -1947,7 +1971,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             if let Some(term) = term_guard.as_mut() {
                 term.poll();
                 use tui_term::widget::PseudoTerminal;
-                let block = Block::default().borders(Borders::ALL).title("Terminal");
+                let block = Block::default().borders(Borders::ALL).title(term_title.clone());
                 let inner = block.inner(halves[1]);
                 if inner.width > 0 && inner.height > 0 {
                     term.resize(inner.height, inner.width);
