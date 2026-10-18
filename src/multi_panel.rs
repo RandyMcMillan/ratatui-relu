@@ -1299,10 +1299,10 @@ impl MultiPanelApp {
                             // While boosted, toggle the right panel (git blame).
                             self.state.right_sidebar.toggle_between(0.0, 1.0);
                             if self.state.right_sidebar.target() > 0.5 {
-                        if let Some(path) = self.selected_file.clone() {
-                            self.fetch_blame(&path);
-                        }
-                    }
+                                if let Some(path) = self.selected_file.clone() {
+                                    self.fetch_blame(&path);
+                                }
+                            }
                         } else {
                             // Boost the main view.
                             self.main_boost = !self.main_boost;
