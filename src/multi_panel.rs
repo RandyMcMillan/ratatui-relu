@@ -1810,7 +1810,7 @@ impl MultiPanelApp {
                         self.settings_state.footer.set_target(0.0);
                     }
                 }
-                _ => {}
+                _ => self.handle_key(key.code),
             }
             return;
         }
