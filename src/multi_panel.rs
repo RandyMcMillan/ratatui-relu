@@ -2431,24 +2431,26 @@ pub fn transition_matrix(state: u8, key: crossterm::event::KeyCode) -> u8 {
     }
 
     let (nh, nl, nr, nf, ntop_b, nbot_b, nleft_b, nright_b) = match key {
-        KeyCode::Up => {
-            if h == 0 && f == 1 {
-                (h, l, r, f, top_b, bot_b ^ 1, left_b, right_b)
-            } else if h == 0 {
-                (h, l, r, 1, top_b, bot_b, left_b, right_b)
-            } else {
-                (0, l, r, f, top_b, bot_b, left_b, right_b)
-            }
-        }
-        KeyCode::Down => {
-            if f == 0 && h == 1 {
-                (h, l, r, f, top_b ^ 1, bot_b, left_b, right_b)
-            } else if f == 0 {
-                (1, l, r, f, top_b, bot_b, left_b, right_b)
-            } else {
-                (h, l, r, 0, top_b, bot_b, left_b, right_b)
-            }
-        }
+        // KeyCode::Up => {
+        //     if h == 0 && f == 1 {
+        //         (h, l, r, f, top_b, bot_b ^ 1, left_b, right_b)
+        //     } else if h == 0 {
+        //         (h, l, r, 1, top_b, bot_b, left_b, right_b)
+        //     } else {
+        //         (0, l, r, f, top_b, bot_b, left_b, right_b)
+        //     }
+        // }
+        // KeyCode::Down => {
+        //    if f == 0 && h == 1 {
+        //        (h, l, r, f, top_b ^ 1, bot_b, left_b, right_b)
+        //    } else if f == 0 {
+        //        (1, l, r, f, top_b, bot_b, left_b, right_b)
+        //    } else {
+        //        (h, l, r, 0, top_b, bot_b, left_b, right_b)
+        //    }
+        // }
+        KeyCode::Up => (h, l, r, f, top_b, bot_b, left_b, right_b),
+        KeyCode::Down => (h, l, r, f, top_b, bot_b, left_b, right_b),
         KeyCode::Right => {
             if r == 0 && l == 1 {
                 (h, l, r, f, top_b, bot_b, left_b ^ 1, right_b)
