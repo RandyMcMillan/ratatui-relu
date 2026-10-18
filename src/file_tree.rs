@@ -132,26 +132,32 @@ impl FileTreeState {
     }
 
     pub fn apply_persisted_state(&mut self, data: &Self) {
-        self.collapsed = data.collapsed.clone();
+        // Drop-down (expand/collapse) state is intentionally not restored so
+        // directories always start collapsed by default.
         self.selected = data.selected.clone();
         self.scroll = data.scroll;
         self.rebuild();
     }
 
+    /// Collapse every directory in the tree (default-closed view).
+    pub fn collapse_all(&mut self) {
+        let mut collapsed = BTreeSet::new();
+        if let Some(tree) = &self.tree {
+            for (item, _) in tree.iterate(0, usize::MAX) {
+                if item.kind().is_path() {
+                    collapsed.insert(item.info().full_path().to_string_lossy().to_string());
+                }
+            }
+        }
+        self.collapsed = collapsed;
+        self.rebuild();
+    }
+
     pub fn snapshot(&self) -> Self {
-        // Sync the collapsed set from the live tree so expand/collapse toggles
-        // (Left/Right) are persisted across restarts.
-        let collapsed = if let Some(tree) = &self.tree {
-            tree.iterate(0, usize::MAX)
-                .filter(|(item, _)| item.kind().is_path() && item.kind().is_path_collapsed())
-                .map(|(item, _)| item.info().full_path().to_string_lossy().to_string())
-                .collect()
-        } else {
-            self.collapsed.clone()
-        };
+        // Expand/collapse state is intentionally not persisted.
         Self {
             paths: self.paths.clone(),
-            collapsed,
+            collapsed: Default::default(),
             selected: self.selected.clone(),
             scroll: self.scroll,
             git_status_map: Default::default(),
