@@ -157,7 +157,13 @@ fn run_app(
                         app.show_help = false;
                         app.show_settings = false;
                         app.show_terminal = false;
-                        if app.main_boost {
+                        if app.right_full {
+                            app.right_full = false;
+                        } else if app.right_boost {
+                            app.right_boost = false;
+                        } else if app.state.right_sidebar.target() > 0.5 {
+                            app.state.right_sidebar.set_target(0.0);
+                        } else if app.main_boost {
                             app.main_boost = false;
                         } else {
                             app.main_active = false;
