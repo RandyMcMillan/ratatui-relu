@@ -1530,28 +1530,30 @@ impl MultiPanelApp {
                     self.show_settings = true;
                 }
             }
-            KeyCode::Up => {
-                let top_closed = self.state.header.target() < 0.5;
-                let bottom_open = self.state.footer.target() > 0.5;
-                if top_closed && bottom_open {
-                    self.bottom_boost = !self.bottom_boost;
-                } else if top_closed {
-                    self.state.footer.set_target(1.0);
-                } else {
-                    self.state.header.toggle_between(0.0, 1.0);
-                }
-            }
-            KeyCode::Down => {
-                let bottom_closed = self.state.footer.target() < 0.5;
-                let top_open = self.state.header.target() > 0.5;
-                if bottom_closed && top_open {
-                    self.top_boost = !self.top_boost;
-                } else if bottom_closed {
-                    self.state.header.set_target(1.0);
-                } else {
-                    self.state.footer.toggle_between(0.0, 1.0);
-                }
-            }
+            // KeyCode::Up => {
+            //     let top_closed = self.state.header.target() < 0.5;
+            //     let bottom_open = self.state.footer.target() > 0.5;
+            //     if top_closed && bottom_open {
+            //         self.bottom_boost = !self.bottom_boost;
+            //     } else if top_closed {
+            //         self.state.footer.set_target(1.0);
+            //     } else {
+            //         self.state.header.toggle_between(0.0, 1.0);
+            //     }
+            // }
+            // KeyCode::Down => {
+            //     let bottom_closed = self.state.footer.target() < 0.5;
+            //     let top_open = self.state.header.target() > 0.5;
+            //     if bottom_closed && top_open {
+            //         self.top_boost = !self.top_boost;
+            //     } else if bottom_closed {
+            //         self.state.header.set_target(1.0);
+            //     } else {
+            //         self.state.footer.toggle_between(0.0, 1.0);
+            //     }
+            // }
+            KeyCode::Up => {} // we still want 't' toggle header
+            KeyCode::Down => {} // we still want 'f' toggle footer
             KeyCode::Right => {
                 let right_closed = self.state.right_sidebar.target() < 0.5;
                 let left_open = self.state.left_sidebar.target() > 0.5;
