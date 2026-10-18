@@ -75,11 +75,13 @@ impl TerminalState {
     pub fn scroll_up(&mut self, lines: usize) {
         self.scrollback = self.scrollback.saturating_add(lines);
         self.parser.screen_mut().set_scrollback(self.scrollback);
+        self.scrollback = self.parser.screen().scrollback();
     }
 
     pub fn scroll_down(&mut self, lines: usize) {
         self.scrollback = self.scrollback.saturating_sub(lines);
         self.parser.screen_mut().set_scrollback(self.scrollback);
+        self.scrollback = self.parser.screen().scrollback();
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) {
