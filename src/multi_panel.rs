@@ -32,6 +32,7 @@ pub struct MultiPanelState {
     pub header: Transition,
     pub left_sidebar: Transition,
     pub right_sidebar: Transition,
+    pub statusbar: Transition,
     pub footer: Transition,
 }
 
@@ -44,6 +45,7 @@ impl MultiPanelState {
             header: Transition::new(value, speed),
             left_sidebar: Transition::new(value, speed),
             right_sidebar: Transition::new(value, speed),
+            statusbar: Transition::new(value, speed),
             footer: Transition::new(value, speed),
         }
     }
@@ -114,6 +116,10 @@ impl MultiPanelState {
         (self.header.current() * panel_height as f64).round() as u16
     }
 
+    /// Current statusbar height in rows when `panel_height` is fully open.
+    pub fn statusbar_height(&self, _panel_height: u16) -> u16 {
+        (self.statusbar.current() * _panel_height as f64).round() as u16
+    }
     /// Current footer height in rows when `panel_height` is fully open.
     pub fn footer_height(&self, panel_height: u16) -> u16 {
         (self.footer.current() * panel_height as f64).round() as u16
@@ -154,19 +160,24 @@ pub struct MultiPanel {
     pub left_title: String,
     pub right_title: String,
     pub main_title: String,
+    pub statusbar_title: String,
     pub footer_title: String,
     pub header_content: Option<PanelContent>,
     pub left_content: Option<PanelContent>,
     pub right_content: Option<PanelContent>,
     pub main_content: Option<PanelContent>,
+    pub statusbar_content: Option<PanelContent>,
     pub footer_content: Option<PanelContent>,
     pub header_color: Color,
     pub left_color: Color,
     pub right_color: Color,
+    pub statusbar_color: Color,
     pub footer_color: Color,
     pub main_color: Color,
     /// Height of the header when fully open, in rows.
     pub header_height: u16,
+    /// Height of the statusbar when fully open, in rows.
+    pub statusbar_height: u16,
     /// Height of the footer when fully open, in rows.
     pub footer_height: u16,
     /// Width of the left sidebar as a fraction of total width (0.0–1.0).
@@ -191,18 +202,22 @@ impl MultiPanel {
             left_title: "Files".to_string(),
             right_title: "Right".to_string(),
             main_title: "Main".to_string(),
-            footer_title: "Footer".to_string(),
+            statusbar_title: "205:statusbar_title".to_string(),
+            footer_title: "204:Footer".to_string(),
             header_content: None,
             left_content: None,
             right_content: None,
             main_content: None,
+            statusbar_content: None, // TODO make persistent content
             footer_content: None,
             header_color: Color::Blue,
             left_color: Color::Green,
             right_color: Color::Magenta,
+            statusbar_color: Color::Yellow,
             footer_color: Color::Yellow,
             main_color: Color::Reset,
             header_height: 5,
+            statusbar_height: 3,
             footer_height: 5,
             left_sidebar_width_fraction: 0.25,
             right_sidebar_width_fraction: 0.25,
@@ -232,6 +247,12 @@ impl MultiPanel {
     /// Builder-style setter for main panel title.
     pub fn main_title(mut self, title: impl Into<String>) -> Self {
         self.main_title = title.into();
+        self
+    }
+
+    /// Builder-style setter for footer title.
+    pub fn statusbar_title(mut self, title: impl Into<String>) -> Self {
+        self.statusbar_title = title.into();
         self
     }
 
@@ -277,6 +298,15 @@ impl MultiPanel {
         self
     }
 
+    /// Builder-style setter for custom statusbar content.
+    pub fn statusbar_content<F>(mut self, content: F) -> Self
+    where
+        F: Fn(&mut MultiPanelState, Rect, &mut Buffer) + 'static,
+    {
+        self.statusbar_content = Some(Box::new(content));
+        self
+    }
+
     /// Builder-style setter for custom footer content.
     pub fn footer_content<F>(mut self, content: F) -> Self
     where
@@ -296,6 +326,12 @@ impl MultiPanel {
     /// Builder-style setter for header height.
     pub fn header_height(mut self, height: u16) -> Self {
         self.header_height = height;
+        self
+    }
+
+    /// Builder-style setter for statusbar height.
+    pub fn statusbar_height(mut self, height: u16) -> Self {
+        self.statusbar_height = height;
         self
     }
 
@@ -362,6 +398,11 @@ impl MultiPanel {
         self
     }
 
+    /// Builder-style setter for statusbar border color.
+    pub fn statusbar_color(mut self, color: Color) -> Self {
+        self.statusbar_color = color;
+        self
+    }
     /// Builder-style setter for footer border color.
     pub fn footer_color(mut self, color: Color) -> Self {
         self.footer_color = color;
@@ -380,6 +421,7 @@ impl StatefulWidget for MultiPanel {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let header_height = (state.header.current() * self.header_height as f64).round() as u16;
+        let statusbar_height = 3_u16; //(state.footer.current() * self.footer_height as f64).round() as u16;
         let footer_height = (state.footer.current() * self.footer_height as f64).round() as u16;
         let left_width =
             ((state.left_sidebar.current() * area.width as f64 * self.left_sidebar_width_fraction)
@@ -395,7 +437,8 @@ impl StatefulWidget for MultiPanel {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(header_height),
-                Constraint::Min(0),
+                Constraint::Min(10_u16),
+                Constraint::Length(statusbar_height), // statusbar // persistent in all states
                 Constraint::Length(footer_height),
             ])
             .split(area);
@@ -404,7 +447,7 @@ impl StatefulWidget for MultiPanel {
             .direction(Direction::Horizontal)
             .constraints([
                 Constraint::Length(left_width),
-                Constraint::Min(0),
+                Constraint::Min(10_u16),
                 Constraint::Length(right_width),
             ])
             .split(vertical[1]);
@@ -412,7 +455,7 @@ impl StatefulWidget for MultiPanel {
         render_panel(
             buf,
             &self.header_title,
-            vertical[0],
+            vertical[0], // first in
             self.header_color,
             state,
             self.header_content.as_deref(),
@@ -420,7 +463,7 @@ impl StatefulWidget for MultiPanel {
         render_panel(
             buf,
             &self.left_title,
-            horizontal[0],
+            horizontal[0], // first in
             self.left_color,
             state,
             self.left_content.as_deref(),
@@ -428,7 +471,7 @@ impl StatefulWidget for MultiPanel {
         render_panel(
             buf,
             &self.main_title,
-            horizontal[1],
+            horizontal[1], // second in
             self.main_color,
             state,
             self.main_content.as_deref(),
@@ -436,15 +479,26 @@ impl StatefulWidget for MultiPanel {
         render_panel(
             buf,
             &self.right_title,
-            horizontal[2],
+            horizontal[2], // third in
             self.right_color,
             state,
             self.right_content.as_deref(),
         );
+
+        // statusbar
+        render_panel(
+            buf,
+            &self.statusbar_title,
+            vertical[2], // statusbar row
+            self.statusbar_color,
+            state,
+            self.statusbar_content.as_deref(),
+        );
+
         render_panel(
             buf,
             &self.footer_title,
-            vertical[2],
+            vertical[2], // last in
             self.footer_color,
             state,
             self.footer_content.as_deref(),
@@ -488,13 +542,37 @@ fn render_panel(
 // Reusable multi-panel application driver
 // ============================================================
 
+// NOTE
+// //        // top
+// ('t', 0), // y
+// ('y', 0), // t
+// //        // left
+// ('l', 1), // a
+// ('a', 1), // l
+// //        //
+// ('q', 1), // p
+// ('p', 1), // q
+// //        // right
+// ('r', 2), // u
+// ('u', 2), // r
+// //        // footer
+// ('f', 3), // h
+// ('h', 3), // f
+// ('g', usize::MAX), // center of keyboard
+
 /// Keys simulated during test mode.
-pub const TEST_KEYS: [KeyCode; 5] = [
+pub const TEST_KEYS: [KeyCode; 11] = [
+    KeyCode::Up,
+    KeyCode::Up,
+    KeyCode::Left,
     KeyCode::Left,
     KeyCode::Right,
-    KeyCode::Up,
+    KeyCode::Right,
+    KeyCode::Down,
     KeyCode::Down,
     KeyCode::Char(' '),
+    KeyCode::Char('t'), // add toggling to test
+    KeyCode::Char('f'), // add toggling to test
 ];
 
 fn help_text() -> Text<'static> {
@@ -1266,8 +1344,10 @@ impl MultiPanelApp {
     }
 
     /// Handle a key press (real or simulated).
-    pub fn handle_key(&mut self, code: KeyCode) {
+    pub fn handle_key(&mut self, code: KeyCode) { // maybe from handle_key_event
         // When the left panel is open it is active.
+        // filetree view may NOT be visible in this state!!
+        // for scrolling in main and blame left_sidebar must be active
         if self.state.left_sidebar.target() > 0.5
             && matches!(
                 code,
@@ -1280,6 +1360,14 @@ impl MultiPanelApp {
                     | KeyCode::End
                     | KeyCode::PageUp
                     | KeyCode::PageDown
+                    // TODO
+                    // add more functionality to filetree
+                    // nerdtree-ish? 
+                    | KeyCode::Char('<')
+                    | KeyCode::Char('>')
+                    | KeyCode::Char(':')
+                    | KeyCode::Char('?')
+                    | KeyCode::Char('/')
             )
         {
             if self.main_active {
@@ -1294,8 +1382,12 @@ impl MultiPanelApp {
                         if self.main_boost {
                             self.main_boost = false;
                             // TODO handle scrolling differently self.main_scroll = self.main_scroll.saturating_sub(20);
-                        } else {
+                        } else if self.main_active {
+                            self.main_active = false;
                             // TODO handle scrolling differently self.main_scroll = self.main_scroll.saturating_sub(20);
+                        } else {
+                            self.main_active = true;
+                            self.main_boost = true;
                         }
                     }
                     KeyCode::Right => {
@@ -1410,6 +1502,7 @@ impl MultiPanelApp {
 
         // Load the selected file into the main panel on Enter (left closed).
         if matches!(code, KeyCode::Enter) {
+            // TODO handle folder paths - subtree? 
             let selected = self
                 .file_tree_state
                 .borrow()
@@ -1452,8 +1545,9 @@ impl MultiPanelApp {
             ('r', 2), // u
             ('u', 2), // r
             //        // footer
-            ('f', 3), // h
-            ('h', 3), // f
+            ('f', 3),          // h
+            ('b', 3),          // f
+            ('h', 3),          // f
             ('g', usize::MAX), // center of keyboard
         ];
         if let KeyCode::Char(c) = code
@@ -1552,27 +1646,38 @@ impl MultiPanelApp {
             //         self.state.footer.toggle_between(0.0, 1.0);
             //     }
             // }
-            KeyCode::Up => {} // we still want 't' toggle header
-            KeyCode::Down => {} // we still want 'f' toggle footer
+            KeyCode::Up => {}   // we still want 't' toggle header
+            KeyCode::Down => {} // we still want 'f' and 'b' (bottom) toggle footer
             KeyCode::Right => {
                 let right_closed = self.state.right_sidebar.target() < 0.5;
                 let left_open = self.state.left_sidebar.target() > 0.5;
                 // When a file is open and the left panel is closed and the right
                 // panel is closed, Right toggles the right panel open and loads
                 // git blame for the file.
+                // viewing file contents unobstructed
                 if (self.main_active || self.selected_file.is_some()) && !left_open && right_closed
                 {
-                    self.state.right_sidebar.toggle_between(0.0, 1.0);
+                    self.state.right_sidebar.toggle_between(0.0, 1.0); // first peek
+                    if let Some(path) = self.selected_file.clone() {
+                        self.fetch_blame(&path);
+                    }
+                    return;
+                }
+                if (self.main_active || self.selected_file.is_some()) && !left_open && !right_closed
+                {
+                    self.state.right_sidebar.toggle_between(0.0, 1.0); // second peek
                     if let Some(path) = self.selected_file.clone() {
                         self.fetch_blame(&path);
                     }
                     return;
                 }
                 if right_closed && left_open {
+                    // viewing filelist
                     self.left_boost = !self.left_boost;
                 } else if right_closed {
                     self.state.left_sidebar.set_target(1.0);
                 } else {
+                    // TODO make this cycle reusable
                     // Right panel is open: cycle boost (normal -> 50% -> 100% -> normal).
                     if self.right_full {
                         self.right_full = false;
@@ -1605,7 +1710,7 @@ impl MultiPanelApp {
     /// (arrow keys used by test mode) should keep using [`Self::handle_key`].
     pub fn handle_key_event(&mut self, key: crossterm::event::KeyEvent) {
         use crossterm::event::KeyModifiers;
-        // Help/settings overlays have their own key handling.
+        // Help/Settings overlays have their own key handling.
         if self.show_help || self.show_settings {
             match key.code {
                 crossterm::event::KeyCode::Esc | crossterm::event::KeyCode::Char('q') => {
@@ -1614,6 +1719,7 @@ impl MultiPanelApp {
                     self.show_terminal = false;
                 }
                 crossterm::event::KeyCode::Char('\\') => {
+                    // toggle view help/settings
                     if self.show_help {
                         self.show_help = false;
                         self.show_settings = true;
@@ -1622,6 +1728,7 @@ impl MultiPanelApp {
                         self.show_help = true;
                     }
                 }
+                // TODO filter blame view line numbers correctly
                 crossterm::event::KeyCode::Char('n') => {
                     self.line_numbers = !self.line_numbers;
                 }
@@ -1634,7 +1741,7 @@ impl MultiPanelApp {
             (KeyCode::Char('g'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_grid = !self.show_grid;
             }
-            // Test Mode
+            // Test Mode // NOTE 't' is top
             (KeyCode::Char('t'), m) if m.contains(KeyModifiers::SHIFT) => {
                 if self.test_mode.is_some() {
                     self.stop_test_mode();
@@ -1650,13 +1757,37 @@ impl MultiPanelApp {
             (KeyCode::Char('m'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.chart_mode = !self.chart_mode;
             }
-            // Terminal view
+            // Footer view f <-symetry-> h
+            // Footer view
             (KeyCode::Char('f'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_terminal = !self.show_terminal;
                 if self.show_terminal {
                     self.terminal_cd_to_selection();
                 }
             }
+            // Footer view (bottom)
+            (KeyCode::Char('h'), m) if m.contains(KeyModifiers::SHIFT) => {
+                self.show_terminal = !self.show_terminal;
+                if self.show_terminal {
+                    self.terminal_cd_to_selection();
+                }
+            }
+            // Footer view b <-symetry-> v
+            // Footer view (bottom)
+            (KeyCode::Char('b'), m) if m.contains(KeyModifiers::SHIFT) => {
+                self.show_terminal = !self.show_terminal;
+                if self.show_terminal {
+                    self.terminal_cd_to_selection();
+                }
+            }
+            // Footer view (bottom)
+            (KeyCode::Char('v'), m) if m.contains(KeyModifiers::SHIFT) => {
+                self.show_terminal = !self.show_terminal;
+                if self.show_terminal {
+                    self.terminal_cd_to_selection();
+                }
+            }
+            // should be x <--> n // TODO
             (KeyCode::Char('x'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_terminal = !self.show_terminal;
                 if self.show_terminal {
@@ -1824,9 +1955,9 @@ impl MultiPanelApp {
                                 .map(|x| x.to_path_buf())
                                 .unwrap_or_else(|| std::path::PathBuf::from("."))
                         };
-                        format!("Terminal - {}", dir.display())
+                        format!("1923:Terminal - {}", dir.display())
                     })
-                    .unwrap_or_else(|| "Terminal".to_string());
+                    .unwrap_or_else(|| "1921:Terminal".to_string());
                 let block = Block::default().borders(Borders::ALL).title(term_title);
                 let inner = block.inner(chunks[1]);
                 if inner.width > 0 && inner.height > 0 {
@@ -1890,6 +2021,10 @@ impl MultiPanelApp {
         if self.top_boost { 10 } else { 5 }
     }
 
+    /// Current statusbar height, including boost.
+    pub fn statusbar_height(&self) -> u16 {
+        if self.bottom_boost { 3 } else { 3 }
+    }
     /// Current footer height, including boost.
     pub fn footer_height(&self) -> u16 {
         if self.bottom_boost { 10 } else { 5 }
@@ -2025,8 +2160,8 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     let help = "[t/l/r/f] toggle  [Space] all  [↑↓←→] boost  [Shift+A] automate tui  [Shift+T] test  [Shift+C] colors  [Shift+M] charts  [\\] help  [q] quit";
 
     MultiPanel::new()
-        .header_title("Header")
-        .left_title("Files")
+        .header_title("2124:Header")
+        .left_title("2125:Files")
         .right_title(
             selected_file
                 .as_ref()
@@ -2038,8 +2173,9 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                 })
                 .unwrap_or_else(|| "Right".to_string()),
         )
-        .main_title("")
-        .footer_title("")
+        .main_title("2137")
+        .statusbar_title("2138") // obfuscating filetree view currently
+        //.footer_title("2139")
         .header_content(move |_state, area, buf| {
             let top = Rect::new(area.x, area.y, area.width, 1.min(area.height));
             let p = Paragraph::new("↑ top").alignment(Alignment::Center);
@@ -2143,7 +2279,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                 .center_content({
                     if let Some(label) = test_label.clone() {
                         let bits = test_bits.unwrap_or(0);
-                        format!("{}\n{}", label, bit_display(bits))
+                        format!("label:2245:{}\n{}", label, bit_display(bits))
                     } else {
                         format!("{}x{}", area.width, area.height)
                     }
@@ -2152,6 +2288,63 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                 StatefulWidget::render(grid, area, buf, state);
             } else {
                 Clear.render(area, buf);
+            }
+        })
+        .statusbar_content({
+            let terminal_state = terminal_state.clone();
+            let footer_terminal_area = footer_terminal_area.clone();
+            let file_tree_state = file_tree_state_for_title.clone();
+            move |_state, area, buf| {
+                let selected_path = file_tree_state
+                    .borrow()
+                    .selected_path()
+                    .map(|p| p.to_path_buf());
+                let term_title = selected_path
+                    .as_ref()
+                    .map(|p| {
+                        let dir = if p.is_dir() {
+                            p.clone()
+                        } else {
+                            p.parent()
+                                .map(|x| x.to_path_buf())
+                                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                        };
+                        format!("2272:StatusBar - {}", dir.display())
+                    })
+                    .unwrap_or_else(|| "2274:StatusBar".to_string());
+                let halves = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                    .split(area);
+                *footer_terminal_area.borrow_mut() = Some(halves[0]);
+                Widget::render(
+                    Paragraph::new(help).alignment(Alignment::Left),
+                    halves[0],
+                    buf,
+                );
+                let mut term_guard = terminal_state.borrow_mut();
+                if let Some(term) = term_guard.as_mut() {
+                    term.poll();
+                    use tui_term::widget::PseudoTerminal;
+                    let block = Block::default()
+                        .borders(Borders::ALL)
+                        .title(term_title.clone());
+                    let inner = block.inner(halves[0]);
+                    if inner.width > 0 && inner.height > 0 {
+                        term.resize(inner.height, inner.width);
+                    }
+                    //Widget::render(block, halves[0], buf);
+                    //if inner.width > 0 && inner.height > 0 {
+                    //    let pseudo = PseudoTerminal::new(term.parser.screen());
+                    //    Widget::render(pseudo, inner, buf);
+                    //}
+                } else {
+                //    Widget::render(
+                //        Paragraph::new("<terminal>").alignment(Alignment::Right),
+                //        halves[1],
+                //        buf,
+                //    );
+                }
             }
         })
         .footer_content({
@@ -2214,6 +2407,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         .header_color(color_demo_color.unwrap_or(Color::Blue))
         .left_color(color_demo_color.unwrap_or(Color::Green))
         .right_color(color_demo_color.unwrap_or(Color::Magenta))
+        .statusbar_color(color_demo_color.unwrap_or(Color::Yellow))
         .footer_color(color_demo_color.unwrap_or(Color::Yellow))
         .main_color(color_demo_color.unwrap_or(Color::Reset))
         .header_height(header_height)
@@ -2288,14 +2482,19 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
                 );
             }
         })
-        .footer_content(|_state, area, buf| {
+        .statusbar_content(|_state, area, buf| {
             let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
             Widget::render(p, area, buf);
+        })
+        .footer_content(|_state, area, buf| {
+            let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
+            //Widget::render(p, area, buf);
         })
         .header_color(Color::Cyan)
         .left_color(Color::Green)
         .right_color(Color::Magenta)
         .main_color(Color::Reset)
+        .statusbar_color(Color::Yellow)
         .footer_color(Color::Yellow)
         .panel_height(3)
         .sidebar_width_fraction(0.25)
@@ -2360,6 +2559,7 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .left_color(Color::Green)
         .right_color(Color::Magenta)
         .main_color(Color::Reset)
+        .statusbar_color(Color::Yellow)
         .footer_color(Color::Yellow)
         .panel_height(1)
         .sidebar_width_fraction(0.25)
@@ -2472,6 +2672,14 @@ pub fn transition_matrix(state: u8, key: crossterm::event::KeyCode) -> u8 {
                 (h, 0, r, f, top_b, bot_b, left_b, right_b)
             }
         }
+        KeyCode::Char('t') | KeyCode::Char('y') => (h ^ 1, l, r, f, top_b, bot_b, left_b, right_b),
+        KeyCode::Char('l') | KeyCode::Char('a') | KeyCode::Char('q') | KeyCode::Char('p') => {
+            (h, l ^ 1, r, f, top_b, bot_b, left_b, right_b)
+        }
+        KeyCode::Char('r') | KeyCode::Char('u') => (h, l, r ^ 1, f, top_b, bot_b, left_b, right_b),
+        KeyCode::Char('f') | KeyCode::Char('b') | KeyCode::Char('h') => {
+            (h, l, r, f ^ 1, top_b, bot_b, left_b, right_b)
+        }
         KeyCode::Char(' ') => (h ^ 1, l ^ 1, r ^ 1, f ^ 1, top_b, bot_b, left_b, right_b),
         _ => (h, l, r, f, top_b, bot_b, left_b, right_b),
     };
@@ -2486,7 +2694,7 @@ pub fn transition_matrix(state: u8, key: crossterm::event::KeyCode) -> u8 {
         | (nright_b << BIT_RIGHT_BOOST)
 }
 
-/// Run the full 256×5 transition matrix and return the first mismatch, if any.
+/// Run the full 256×7 transition matrix and return the first mismatch, if any.
 pub fn verify_transition_matrix() -> Option<String> {
     for state in 0..=255u8 {
         for key in TEST_KEYS {
