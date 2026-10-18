@@ -1798,6 +1798,12 @@ impl MultiPanelApp {
                 crossterm::event::KeyCode::Char('n') => {
                     self.line_numbers = !self.line_numbers;
                 }
+                crossterm::event::KeyCode::Char('l') => {
+                    self.handle_key(KeyCode::Char('l'));
+                }
+                crossterm::event::KeyCode::Char('r') => {
+                    self.handle_key(KeyCode::Char('r'));
+                }
                 crossterm::event::KeyCode::Right => {
                     self.show_state_table = !self.show_state_table;
                 }
