@@ -33,7 +33,7 @@ fn key_rows() -> &'static [&'static [char]] {
                 '\x1e', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/', '\x1f',
             ],
             &[
-                '\u{2318}', '\x12', ' ', '\x1b', '\x1c', '\x1d', '\x1a', '\x11',
+                '\x10', '\u{2318}', '\x12', ' ', '\x1b', '\x1c', '\x1d', '\x1a', '\x11',
             ],
         ];
         ROWS
@@ -265,6 +265,7 @@ impl KeyboardState {
                     '\x1e' | '\x1f' => "Shift".to_string(),
                     '\x11' => "Ctrl".to_string(),
                     '\x12' => "Alt".to_string(),
+                    '\x10' => "Fn".to_string(),
                     '\x1b' => "Esc".to_string(),
                     '\x1c' => "Left".to_string(),
                     '\x1d' => "Down".to_string(),
@@ -331,6 +332,7 @@ impl StatefulWidget for KeyboardWidget {
                     '\x1e' | '\x1f' => "Shift".to_string(),
                     '\x11' => "Ctrl".to_string(),
                     '\x12' => "Alt".to_string(),
+                    '\x10' => "Fn".to_string(),
                     '\x1b' => "Esc".to_string(),
                     '\x1c' => "←".to_string(),
                     '\x1d' => "↓".to_string(),
