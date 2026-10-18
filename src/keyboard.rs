@@ -306,11 +306,18 @@ impl StatefulWidget for KeyboardWidget {
         let mut idx = 0usize;
 
         for row in &self.rows {
-            let row_width: u16 = row
+            let base_row_width: u16 = row
                 .iter()
                 .map(|k| if *k == ' ' { 15u16 } else { 5u16 })
                 .sum::<u16>()
                 .saturating_add((row.len() as u16).saturating_sub(1));
+            // Scale keys to fill the available width while keeping proportions.
+            let scale = if base_row_width > 0 {
+                (area.width / base_row_width).max(1)
+            } else {
+                1
+            };
+            let row_width: u16 = base_row_width.saturating_mul(scale);
             let indent = area.width.saturating_sub(row_width) / 2;
             let mut x = area.x + indent;
 
@@ -333,7 +340,8 @@ impl StatefulWidget for KeyboardWidget {
                     }
                     _ => key.to_string(),
                 };
-                let w: u16 = if *key == ' ' { 15 } else { 5 };
+                let base_w: u16 = if *key == ' ' { 15 } else { 5 };
+                let w: u16 = base_w.saturating_mul(scale).max(base_w);
                 let h: u16 = 3;
                 let btn_area = Rect::new(x, y, w, h);
 
@@ -350,7 +358,7 @@ impl StatefulWidget for KeyboardWidget {
                     button.render(btn_area, buf);
                 }
                 idx += 1;
-                x += w + 1;
+                x += w + scale.max(1);
             }
             y += 4;
             if y >= area.y + area.height {
