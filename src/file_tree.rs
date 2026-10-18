@@ -104,7 +104,11 @@ impl FileTreeState {
 
     /// Path of the currently selected item.
     pub fn selected_path(&self) -> Option<&Path> {
-        if let Some(info) = self.tree.as_ref().and_then(filetreelist::FileTree::selected_file) {
+        if let Some(info) = self
+            .tree
+            .as_ref()
+            .and_then(filetreelist::FileTree::selected_file)
+        {
             return Some(info.full_path());
         }
         self.selected.as_deref()
