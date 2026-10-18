@@ -1808,13 +1808,12 @@ impl MultiPanelApp {
                     self.show_state_table = !self.show_state_table;
                 }
                 crossterm::event::KeyCode::Up => {
-                    self.show_keyboard = !self.show_keyboard;
-                    // Animate the footer like a mobile keyboard sliding up.
-                    if self.show_keyboard {
-                        self.settings_state.footer.set_target(1.0);
-                    } else {
-                        self.settings_state.footer.set_target(0.0);
-                    }
+                    self.show_keyboard = true;
+                    self.settings_state.footer.set_target(1.0);
+                }
+                crossterm::event::KeyCode::Down => {
+                    self.show_keyboard = false;
+                    self.settings_state.footer.set_target(0.0);
                 }
                 _ => self.handle_key(key.code),
             }
@@ -2602,9 +2601,15 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
                         .title_alignment(Alignment::Left);
                     let shortcuts_inner = shortcuts_block.inner(rows[0]);
                     Widget::render(shortcuts_block, rows[0], buf);
+                    let padded = Rect::new(
+                        shortcuts_inner.x,
+                        shortcuts_inner.y,
+                        shortcuts_inner.width,
+                        shortcuts_inner.height.saturating_sub(1),
+                    );
                     Widget::render(
                         Paragraph::new(help_text()).alignment(Alignment::Left),
-                        shortcuts_inner,
+                        padded,
                         buf,
                     );
 
