@@ -183,6 +183,10 @@ impl MultiPanel {
     /// Create a [`MultiPanel`] with sensible defaults.
     pub fn new() -> Self {
         Self {
+            // TODO
+            // split header into 3 widgets
+            // left_header center_header right_header
+            // right_header text update to current state bits 00000000
             header_title: "Header".to_string(),
             left_title: "Left".to_string(),
             right_title: "Right".to_string(),
