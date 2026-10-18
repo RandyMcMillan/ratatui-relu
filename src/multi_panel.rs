@@ -519,7 +519,10 @@ impl StatefulWidget for MultiPanel {
             use std::io::Write;
             let _ = writeln!(
                 file,
-                "  header={}x{} left={}x{} main={}x{} right={}x{} statusbar={}x{} footer={}x{}",
+                "  [{:?}] fh={} sh={} header={}x{} left={}x{} main={}x{} right={}x{} statusbar={}x{} footer={}x{}",
+                std::time::SystemTime::now(),
+                self.footer_height,
+                self.statusbar_height,
                 vertical[0].width, vertical[0].height,
                 horizontal[0].width, horizontal[0].height,
                 horizontal[1].width, horizontal[1].height,
