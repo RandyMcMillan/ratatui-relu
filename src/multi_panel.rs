@@ -2534,7 +2534,9 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .right_content({
             let right_text = right_text.clone();
             move |_state, area, buf| {
-                let p = Paragraph::new(right_text.clone()).alignment(Alignment::Left);
+                let p = Paragraph::new(right_text.clone())
+                    .alignment(Alignment::Left)
+                    .wrap(ratatui::widgets::Wrap { trim: false });
                 Widget::render(p, area, buf);
             }
         })
