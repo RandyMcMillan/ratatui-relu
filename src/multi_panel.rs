@@ -2531,9 +2531,12 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
             let p = Paragraph::new(left_text).alignment(Alignment::Left);
             Widget::render(p, area, buf);
         })
-        .right_content(move |_state, area, buf| {
-            let p = Paragraph::new(right_text).alignment(Alignment::Left);
-            Widget::render(p, area, buf);
+        .right_content({
+            let right_text = right_text.clone();
+            move |_state, area, buf| {
+                let p = Paragraph::new(right_text.clone()).alignment(Alignment::Left);
+                Widget::render(p, area, buf);
+            }
         })
         .main_content({
             let table = StateHelpTable::new(_app);
