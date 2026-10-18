@@ -140,7 +140,10 @@ fn main() -> io::Result<()> {
     println!("[*] Writing {}", main_rs_path);
     fs::write(&main_rs_path, main_rs_content)?;
 
-    println!("\n[+] Success! Project generated in directory: './{}'", project_dir);
+    println!(
+        "\n[+] Success! Project generated in directory: './{}'",
+        project_dir
+    );
     println!("[+] To run your app:");
     println!("    cd keyboard_demo");
     println!("    cargo run");
