@@ -1965,10 +1965,8 @@ impl MultiPanelApp {
                     && area.y <= event.row
                     && event.row < area.y + area.height
                 {
-                    self.footer_terminal_focus = true;
+                    self.show_terminal = true;
                     self.terminal_cd_to_selection();
-                } else {
-                    self.footer_terminal_focus = false;
                 }
             }
         }
@@ -2130,6 +2128,9 @@ impl MultiPanelApp {
             if let Some(term) = &mut *self.terminal.borrow_mut() {
                 term.poll();
                 use tui_term::widget::PseudoTerminal;
+                if area.width > 0 && area.height > 0 {
+                    term.resize(area.height, area.width);
+                }
                 let pseudo = PseudoTerminal::new(term.parser.screen());
                 Widget::render(pseudo, area, f.buffer_mut());
             }
@@ -2464,34 +2465,22 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
                     .direction(Direction::Horizontal)
                     .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                     .split(area);
-                *footer_terminal_area.borrow_mut() = Some(halves[1]);
                 Widget::render(
                     Paragraph::new(help).alignment(Alignment::Left),
-                    halves[0],
+                    area,
                     buf,
                 );
-                let mut term_guard = terminal_state.borrow_mut();
-                if let Some(term) = term_guard.as_mut() {
-                    term.poll();
-                    use tui_term::widget::PseudoTerminal;
-                    let block = Block::default()
-                        .borders(Borders::ALL)
-                        .title(term_title.clone());
-                    let inner = block.inner(halves[1]);
-                    if inner.width > 0 && inner.height > 0 {
-                        term.resize(inner.height, inner.width);
-                    }
-                    Widget::render(block, halves[1], buf);
-                    if inner.width > 0 && inner.height > 0 {
-                        let pseudo = PseudoTerminal::new(term.parser.screen());
-                        Widget::render(pseudo, inner, buf);
-                    }
-                } else {
+                // Button to open the terminal (full-screen via Shift+F/X).
+                if area.width > 12 {
+                    let btn_area = Rect::new(area.x + area.width.saturating_sub(12), area.y, 12, area.height);
+                    *footer_terminal_area.borrow_mut() = Some(btn_area);
                     Widget::render(
-                        Paragraph::new("<terminal>").alignment(Alignment::Right),
-                        halves[1],
+                        Paragraph::new("[Terminal]").alignment(Alignment::Right),
+                        btn_area,
                         buf,
                     );
+                } else {
+                    *footer_terminal_area.borrow_mut() = Some(area);
                 }
             }
         })
