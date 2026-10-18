@@ -743,7 +743,7 @@ impl StateCell {
     fn label(self, app: &MultiPanelApp) -> String {
         let (name, value) = match self {
             StateCell::Header => (
-                "Header",
+                "746:Header",
                 if app.state.header.target() > 0.5 {
                     "open"
                 } else {
@@ -902,28 +902,28 @@ impl StatefulWidget for StateHelpTable {
             }
         };
 
-        render_cell(0, rows[0]); // Header
-        render_cell(1, rows[1]); // Top boost
+        render_cell(0, rows[0]); // Header ?
+        render_cell(1, rows[1]); // Top boost ?
 
         // Middle row: left and right options combined, with Grid in the center.
         let mid_cols = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
+                Constraint::Percentage(20), //left
+                Constraint::Percentage(20), // left boost? 
+                Constraint::Percentage(20), // main
+                Constraint::Percentage(20), // right boost?
+                Constraint::Percentage(20), // right
             ])
-            .split(rows[2]);
+            .split(rows[2]); // ?
         render_cell(2, mid_cols[0]); // Left
         render_cell(5, mid_cols[1]); // Left boost
         render_cell(8, mid_cols[2]); // Grid
         render_cell(7, mid_cols[3]); // Right boost
         render_cell(4, mid_cols[4]); // Right
 
-        render_cell(3, rows[3]); // Bottom boost
-        render_cell(6, rows[4]); // Footer
+        render_cell(3, rows[3]); // Bottom boost ?
+        render_cell(6, rows[4]); // Footer ?
     }
 }
 
@@ -1016,7 +1016,7 @@ pub struct MultiPanelApp {
     pub terminal: Rc<RefCell<Option<TerminalState>>>,
     /// Footer terminal area (for mouse hit-testing).
     #[serde(skip)]
-    pub footer_terminal_area: Rc<RefCell<Option<Rect>>>,
+    pub footer_terminal_area: Rc<RefCell<Option<Rect>>>, // is this stretching footer? 
     /// Statusbar area (for mouse hit-testing; clicks here are ignored).
     #[serde(skip)]
     pub statusbar_area: Rc<RefCell<Option<Rect>>>,
@@ -1206,7 +1206,19 @@ impl MultiPanelApp {
             app.config = config;
             return app;
         }
-        Self::from_state_with_config(MultiPanelState::open(4.0), config)
+        let mut state = MultiPanelState::closed(4.0);
+        state.header.set_target(1.0);
+        state.left_sidebar.set_target(1.0);
+        state.right_sidebar.set_target(0.0);
+        state.footer.set_target(0.0);
+        state.header.snap();
+        state.left_sidebar.snap();
+        state.right_sidebar.snap();
+        state.footer.snap();
+        let mut app = Self::from_state_with_config(state, config);
+        app.top_boost = false;
+        app.bottom_boost = true;
+        app
     }
 
     /// Create an app from an existing panel state and the demo config.
@@ -2151,7 +2163,8 @@ impl MultiPanelApp {
     }
     /// Current footer height, including boost.
     pub fn footer_height(&self) -> u16 {
-        if self.bottom_boost { 10 } else { 5 }
+        // log here
+        if self.bottom_boost { 100 } else { 0 }
     }
 }
 
@@ -2488,7 +2501,12 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
 /// multi-panel layout matching the help overlay.
 pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
     let left_text = "\n\n    l/a/q/p: left panel\n    r/u: right panel\n    f/h: footer\n    t: header\n    Space: all panels\n    n: line numbers\n    e: open in editor";
-    let right_text = "\n\n    Press \\ again for help\n    Esc/q to close";
+    let right_text = format!(
+        "\n\n    Press \\ again for help\n    Esc/q to close\n\n    State path:\n    {}",
+        MultiPanelApp::default_config_path()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "unknown".to_string())
+    );
     let line_width = |text: &str| {
         text.lines()
             .map(|line| line.len() as u16)
@@ -2619,7 +2637,7 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .footer_height(50)
         .sidebar_width_fraction(0.25)
         .left_sidebar_min_width(line_width(left_text))
-        .right_sidebar_min_width(line_width(right_text))
+        .right_sidebar_min_width(line_width(&right_text))
 }
 
 /// The built-in help widget builder. Renders the help text inside a
