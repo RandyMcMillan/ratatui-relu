@@ -2552,6 +2552,7 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .statusbar_color(Color::Yellow)
         .footer_color(Color::Yellow)
         .panel_height(3)
+        .footer_height(12)
         .sidebar_width_fraction(0.25)
         .left_sidebar_min_width(line_width(left_text))
         .right_sidebar_min_width(line_width(right_text))
