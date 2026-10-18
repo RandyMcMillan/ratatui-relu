@@ -33,7 +33,7 @@ fn key_rows() -> &'static [&'static [char]] {
                 '\x1e', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/', '\x1f',
             ],
             &[
-                '\x10', '\u{2318}', '\x12', ' ', '\x1b', '\x1c', '\x1d', '\x1a', '\x11',
+                '\x10', '\x11', '\x12', '\u{2318}', ' ', '\u{2318}', '\x12', '\x1b', '\x1c', '\x1d', '↑', '\x1a',
             ],
         ];
         ROWS
@@ -250,6 +250,7 @@ impl KeyboardState {
                     '\x1b' => KeyboardAction::Esc,
                     '\x1c' => KeyboardAction::Left,
                     '\x1d' => KeyboardAction::Down,
+                    '↑' => KeyboardAction::Up,
                     '\x1a' => KeyboardAction::Right,
                     c if (c as u32) >= 0xE001 && (c as u32) <= 0xE00C => {
                         KeyboardAction::Function(((c as u32) - 0xE000) as u8)
@@ -269,6 +270,7 @@ impl KeyboardState {
                     '\x1b' => "Esc".to_string(),
                     '\x1c' => "Left".to_string(),
                     '\x1d' => "Down".to_string(),
+                    '↑' => "Up".to_string(),
                     '\x1a' => "Right".to_string(),
                     c if (c as u32) >= 0xE001 && (c as u32) <= 0xE00C => {
                         format!("F{}", (c as u32) - 0xE000)
