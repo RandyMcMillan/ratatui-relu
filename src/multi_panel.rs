@@ -1620,6 +1620,9 @@ impl MultiPanelApp {
                 use tui_term::widget::PseudoTerminal;
                 let block = Block::default().borders(Borders::ALL).title("Terminal");
                 let inner = block.inner(chunks[1]);
+                if inner.width > 0 && inner.height > 0 {
+                    term.resize(inner.height, inner.width);
+                }
                 Widget::render(block, chunks[1], f.buffer_mut());
                 if inner.width > 0 && inner.height > 0 {
                     let pseudo = PseudoTerminal::new(term.parser.screen());
