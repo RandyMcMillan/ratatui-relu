@@ -24,9 +24,8 @@ impl TerminalState {
                 pixel_height: 0,
             })
             .ok()?;
-        let mut cmd = CommandBuilder::new(
-            std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string()),
-        );
+        let mut cmd =
+            CommandBuilder::new(std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string()));
         if let Ok(cwd) = std::env::current_dir() {
             cmd.cwd(cwd);
         }
