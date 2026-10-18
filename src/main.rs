@@ -82,7 +82,10 @@ fn run_app(
                         } else {
                             let bytes = match key.code {
                                 crossterm::event::KeyCode::Char(c) => {
-                                    if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+                                    if key
+                                        .modifiers
+                                        .contains(crossterm::event::KeyModifiers::CONTROL)
+                                    {
                                         vec![c as u8 & 0x1f]
                                     } else {
                                         c.to_string().into_bytes()
@@ -112,7 +115,10 @@ fn run_app(
                             // Send keystroke to terminal.
                             let bytes = match key.code {
                                 crossterm::event::KeyCode::Char(c) => {
-                                    if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+                                    if key
+                                        .modifiers
+                                        .contains(crossterm::event::KeyModifiers::CONTROL)
+                                    {
                                         vec![c as u8 & 0x1f]
                                     } else {
                                         c.to_string().into_bytes()
@@ -157,7 +163,9 @@ fn run_app(
                             app.main_active = false;
                         }
                         app.file_tree_focus = false;
-                    } else if key.modifiers.contains(crossterm::event::KeyModifiers::SHIFT)
+                    } else if key
+                        .modifiers
+                        .contains(crossterm::event::KeyModifiers::SHIFT)
                         && matches!(
                             key.code,
                             crossterm::event::KeyCode::Char('Q')
