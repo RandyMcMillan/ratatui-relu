@@ -135,9 +135,19 @@ impl FileTreeState {
     }
 
     pub fn snapshot(&self) -> Self {
+        // Sync the collapsed set from the live tree so expand/collapse toggles
+        // (Left/Right) are persisted across restarts.
+        let collapsed = if let Some(tree) = &self.tree {
+            tree.iterate(0, usize::MAX)
+                .filter(|(item, _)| item.kind().is_path() && item.kind().is_path_collapsed())
+                .map(|(item, _)| item.info().full_path().to_string_lossy().to_string())
+                .collect()
+        } else {
+            self.collapsed.clone()
+        };
         Self {
             paths: self.paths.clone(),
-            collapsed: self.collapsed.clone(),
+            collapsed,
             selected: self.selected.clone(),
             scroll: self.scroll,
             git_status_map: Default::default(),
