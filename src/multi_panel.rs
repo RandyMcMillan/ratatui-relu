@@ -2447,7 +2447,8 @@ pub fn transition_matrix(state: u8, key: crossterm::event::KeyCode) -> u8 {
             } else if r == 0 {
                 (h, 1, r, f, top_b, bot_b, left_b, right_b)
             } else {
-                (h, l, 0, f, top_b, bot_b, left_b, right_b)
+                // Right panel open: boost it instead of closing.
+                (h, l, r, f, top_b, bot_b, left_b, right_b ^ 1)
             }
         }
         KeyCode::Left => {
