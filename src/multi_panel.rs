@@ -2640,7 +2640,7 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .footer_height(50)
         .sidebar_width_fraction(0.25)
         .left_sidebar_min_width(line_width(left_text))
-        .right_sidebar_min_width(line_width(&right_text))
+        .right_sidebar_min_width(0)
 }
 
 /// The built-in help widget builder. Renders the help text inside a
