@@ -1253,7 +1253,15 @@ impl MultiPanelApp {
         if self.state.left_sidebar.target() > 0.5
             && matches!(
                 code,
-                KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right | KeyCode::Enter
+                KeyCode::Up
+                    | KeyCode::Down
+                    | KeyCode::Left
+                    | KeyCode::Right
+                    | KeyCode::Enter
+                    | KeyCode::Home
+                    | KeyCode::End
+                    | KeyCode::PageUp
+                    | KeyCode::PageDown
             )
         {
             if self.main_active {
@@ -1343,6 +1351,9 @@ impl MultiPanelApp {
 
             // Otherwise navigate the file tree.
             self.file_tree_state.borrow_mut().handle_key(code);
+            // Keep the embedded terminal's working directory in sync with the
+            // file tree selection.
+            self.terminal_cd_to_selection();
             return;
         }
 
@@ -1420,15 +1431,19 @@ impl MultiPanelApp {
             }            // File tree navigation in the left panel.
             KeyCode::Char('j') => {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Down);
+                self.terminal_cd_to_selection();
             }
             KeyCode::Char('k') => {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Up);
+                self.terminal_cd_to_selection();
             }
             KeyCode::Char('h') => {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Left);
+                self.terminal_cd_to_selection();
             }
             KeyCode::Char('L') => {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Right);
+                self.terminal_cd_to_selection();
             } // right handed                 // left handed
             KeyCode::Char('\\') => {
                 if self.show_help {
@@ -1607,14 +1622,16 @@ impl MultiPanelApp {
     /// currently selected in the file tree (or its parent when a file is
     /// selected).
     pub fn terminal_cd_to_selection(&mut self) {
-        let dir = self.selected_file.as_ref().map(|p| {
-            if p.is_dir() {
-                p.clone()
+        let selected = self.file_tree_state.borrow().selected_path().map(|p| p.to_path_buf());
+        let dir = selected.map(|p| {
+            let base = if p.is_dir() {
+                p
             } else {
                 p.parent()
                     .map(|parent| parent.to_path_buf())
                     .unwrap_or_else(|| std::path::PathBuf::from("."))
-            }
+            };
+            std::fs::canonicalize(&base).unwrap_or(base)
         });
         if let Some(dir) = dir {
             let quoted = format!("'{}'", dir.display().to_string().replace('\'', "'\\''"));
@@ -1650,14 +1667,18 @@ impl MultiPanelApp {
             if let Some(term) = &mut *self.terminal.borrow_mut() {
                 term.poll();
                 use tui_term::widget::PseudoTerminal;
-                let term_title = self
-                    .selected_file
+                let selected_path = self.file_tree_state.borrow().selected_path().map(|p| p.to_path_buf());
+                let term_title = selected_path
                     .as_ref()
                     .map(|p| {
-                        let dir = if p.is_dir() { p.clone() } else {
-                            p.parent().map(|x| x.to_path_buf()).unwrap_or_else(|| std::path::PathBuf::from("."))
+                        let dir = if p.is_dir() {
+                            p.clone()
+                        } else {
+                            p.parent()
+                                .map(|x| x.to_path_buf())
+                                .unwrap_or_else(|| std::path::PathBuf::from("."))
                         };
-                        format!("$ {}", dir.display())
+                        format!("Terminal - {}", dir.display())
                     })
                     .unwrap_or_else(|| "Terminal".to_string());
                 let block = Block::default().borders(Borders::ALL).title(term_title);
@@ -1797,19 +1818,7 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
     };
     let terminal_state = app.terminal.clone();
     let footer_terminal_area = app.footer_terminal_area.clone();
-    let term_title = selected_file
-        .as_ref()
-        .map(|p| {
-            let dir = if p.is_dir() {
-                p.clone()
-            } else {
-                p.parent()
-                    .map(|x| x.to_path_buf())
-                    .unwrap_or_else(|| std::path::PathBuf::from("."))
-            };
-            format!("$ {}", dir.display())
-        })
-        .unwrap_or_else(|| "Terminal".to_string());
+    let file_tree_state_for_title = app.file_tree_state.clone();
     let git_diff_text = app
         .git
         .as_ref()
@@ -1955,8 +1964,22 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         .footer_content({
             let terminal_state = terminal_state.clone();
             let footer_terminal_area = footer_terminal_area.clone();
-            let term_title = term_title.clone();
+            let file_tree_state = file_tree_state_for_title.clone();
             move |_state, area, buf| {
+                let selected_path = file_tree_state.borrow().selected_path().map(|p| p.to_path_buf());
+                let term_title = selected_path
+                    .as_ref()
+                    .map(|p| {
+                        let dir = if p.is_dir() {
+                            p.clone()
+                        } else {
+                            p.parent()
+                                .map(|x| x.to_path_buf())
+                                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                        };
+                        format!("Terminal - {}", dir.display())
+                    })
+                    .unwrap_or_else(|| "Terminal".to_string());
                 let halves = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])

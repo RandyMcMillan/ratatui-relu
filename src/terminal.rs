@@ -24,9 +24,12 @@ impl TerminalState {
                 pixel_height: 0,
             })
             .ok()?;
-        let cmd = CommandBuilder::new(
+        let mut cmd = CommandBuilder::new(
             std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string()),
         );
+        if let Ok(cwd) = std::env::current_dir() {
+            cmd.cwd(cwd);
+        }
         let child = pair.slave.spawn_command(cmd).ok()?;
         let master = pair.master;
         let writer = master.take_writer().ok()?;
