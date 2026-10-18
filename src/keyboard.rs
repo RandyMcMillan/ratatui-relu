@@ -1,5 +1,6 @@
 //! Clickable, interactive virtual keyboard widget for Ratatui.
 
+use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -7,7 +8,6 @@ use ratatui::{
     text::Line,
     widgets::{StatefulWidget, Widget},
 };
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
 use crate::mouse::is_mouse_over;
 
@@ -16,29 +16,52 @@ fn key_rows() -> &'static [&'static [char]] {
     #[cfg(target_os = "macos")]
     {
         static ROWS: &[&[char]] = &[
-            &['\u{E001}', '\u{E002}', '\u{E003}', '\u{E004}', '\u{E005}', '\u{E006}', '\u{E007}', '\u{E008}', '\u{E009}', '\u{E00A}', '\u{E00B}', '\u{E00C}'],
-            &['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\x08'],
-            &['\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']', '\\'],
-            &['\x14', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', '\'', '\n'],
-            &['\x1e', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/', '\x1f'],
-            &['\u{2318}', '\x12', ' ', '\x1b', '\x1c', '\x1d', '\x1a', '\x11'],
+            &[
+                '\u{E001}', '\u{E002}', '\u{E003}', '\u{E004}', '\u{E005}', '\u{E006}', '\u{E007}',
+                '\u{E008}', '\u{E009}', '\u{E00A}', '\u{E00B}', '\u{E00C}',
+            ],
+            &[
+                '`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\x08',
+            ],
+            &[
+                '\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']', '\\',
+            ],
+            &[
+                '\x14', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', '\'', '\n',
+            ],
+            &[
+                '\x1e', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/', '\x1f',
+            ],
+            &[
+                '\u{2318}', '\x12', ' ', '\x1b', '\x1c', '\x1d', '\x1a', '\x11',
+            ],
         ];
         ROWS
     }
     #[cfg(not(target_os = "macos"))]
     {
         static ROWS: &[&[char]] = &[
-            &['\u{E001}', '\u{E002}', '\u{E003}', '\u{E004}', '\u{E005}', '\u{E006}', '\u{E007}', '\u{E008}', '\u{E009}', '\u{E00A}', '\u{E00B}', '\u{E00C}'],
-            &['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\x08'],
-            &['\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']', '\\'],
-            &['\x14', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', '\'', '\n'],
-            &['\x1e', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/', '\x1f'],
+            &[
+                '\u{E001}', '\u{E002}', '\u{E003}', '\u{E004}', '\u{E005}', '\u{E006}', '\u{E007}',
+                '\u{E008}', '\u{E009}', '\u{E00A}', '\u{E00B}', '\u{E00C}',
+            ],
+            &[
+                '`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\x08',
+            ],
+            &[
+                '\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '[', ']', '\\',
+            ],
+            &[
+                '\x14', 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', '\'', '\n',
+            ],
+            &[
+                '\x1e', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/', '\x1f',
+            ],
             &['\x11', '\x12', ' ', '\x1b', '\x1c', '\x1d', '\x1a'],
         ];
         ROWS
     }
 }
-
 
 /// Actions produced by the keyboard widget interaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -315,7 +338,11 @@ impl StatefulWidget for KeyboardWidget {
                 let btn_area = Rect::new(x, y, w, h);
 
                 if x + w <= area.x + area.width && y + h <= area.y + area.height {
-                    let st = state.button_states.get(idx).copied().unwrap_or(ButtonState::Normal);
+                    let st = state
+                        .button_states
+                        .get(idx)
+                        .copied()
+                        .unwrap_or(ButtonState::Normal);
                     let button = Button::new(label).state(st);
                     if let Some(slot) = state.last_areas.get_mut(idx) {
                         *slot = Some(btn_area);
