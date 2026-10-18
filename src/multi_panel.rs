@@ -1503,7 +1503,7 @@ impl MultiPanelApp {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Left);
                 self.terminal_cd_to_selection();
             }
-            KeyCode::Char('L') => {
+            KeyCode::Char('l') => {
                 self.file_tree_state.borrow_mut().handle_key(KeyCode::Right);
                 self.terminal_cd_to_selection();
             } // right handed                 // left handed
