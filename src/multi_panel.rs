@@ -2291,60 +2291,22 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
             }
         })
         .statusbar_content({
-            let terminal_state = terminal_state.clone();
-            let footer_terminal_area = footer_terminal_area.clone();
-            let file_tree_state = file_tree_state_for_title.clone();
+            let state_bits = state_bits(app);
             move |_state, area, buf| {
-                let selected_path = file_tree_state
-                    .borrow()
-                    .selected_path()
-                    .map(|p| p.to_path_buf());
-                let term_title = selected_path
-                    .as_ref()
-                    .map(|p| {
-                        let dir = if p.is_dir() {
-                            p.clone()
-                        } else {
-                            p.parent()
-                                .map(|x| x.to_path_buf())
-                                .unwrap_or_else(|| std::path::PathBuf::from("."))
-                        };
-                        format!("2272:StatusBar - {}", dir.display())
-                    })
-                    .unwrap_or_else(|| "2274:StatusBar".to_string());
                 let halves = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                     .split(area);
-                *footer_terminal_area.borrow_mut() = Some(halves[0]);
                 Widget::render(
                     Paragraph::new(help).alignment(Alignment::Left),
                     halves[0],
                     buf,
                 );
-                let mut term_guard = terminal_state.borrow_mut();
-                if let Some(term) = term_guard.as_mut() {
-                    term.poll();
-                    use tui_term::widget::PseudoTerminal;
-                    let block = Block::default()
-                        .borders(Borders::ALL)
-                        .title(term_title.clone());
-                    let inner = block.inner(halves[0]);
-                    if inner.width > 0 && inner.height > 0 {
-                        term.resize(inner.height, inner.width);
-                    }
-                    //Widget::render(block, halves[0], buf);
-                    //if inner.width > 0 && inner.height > 0 {
-                    //    let pseudo = PseudoTerminal::new(term.parser.screen());
-                    //    Widget::render(pseudo, inner, buf);
-                    //}
-                } else {
-                //    Widget::render(
-                //        Paragraph::new("<terminal>").alignment(Alignment::Right),
-                //        halves[1],
-                //        buf,
-                //    );
-                }
+                Widget::render(
+                    Paragraph::new(format!("{:08b}", state_bits)).alignment(Alignment::Right),
+                    halves[1],
+                    buf,
+                );
             }
         })
         .footer_content({
