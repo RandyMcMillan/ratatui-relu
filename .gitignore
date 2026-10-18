@@ -2,3 +2,5 @@
 sys/target/
 sys/example
 !Cargo.lock
+
+mock_test
