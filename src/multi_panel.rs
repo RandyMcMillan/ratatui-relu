@@ -1066,9 +1066,14 @@ impl MultiPanelApp {
             if app.git.is_none() {
                 app.git = GitState::new();
             }
-            if let (Some(git), Some(path)) = (&mut app.git, app.selected_file.clone()) {
-                git.fetch_diff(&path);
-                git.fetch_blame(&path);
+            if let Some(path) = app.selected_file.clone() {
+                if let Some(git) = &mut app.git {
+                    git.fetch_diff(&path);
+                }
+                // blame_scroll reset handled in fetch_blame
+                if let Some(git) = &mut app.git {
+                    git.fetch_blame(&path);
+                }
             }
             if app.terminal.borrow().is_none() {
                 *app.terminal.borrow_mut() = TerminalState::new();
@@ -1294,12 +1299,10 @@ impl MultiPanelApp {
                             // While boosted, toggle the right panel (git blame).
                             self.state.right_sidebar.toggle_between(0.0, 1.0);
                             if self.state.right_sidebar.target() > 0.5 {
-                                if let (Some(git), Some(path)) =
-                                    (&mut self.git, self.selected_file.clone())
-                                {
-                                    git.fetch_blame(&path);
-                                }
-                            }
+                        if let Some(path) = self.selected_file.clone() {
+                            self.fetch_blame(&path);
+                        }
+                    }
                         } else {
                             // Boost the main view.
                             self.main_boost = !self.main_boost;
@@ -1339,17 +1342,19 @@ impl MultiPanelApp {
                         .as_ref()
                         .and_then(|p| self.file_view_scrolls.get(p).copied())
                         .unwrap_or(0);
-                    if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
-                        git.fetch_diff(&path);
-                        git.fetch_blame(&path);
+                    if let Some(path) = self.selected_file.clone() {
+                        if let Some(git) = &mut self.git {
+                            git.fetch_diff(&path);
+                        }
+                        self.fetch_blame(&path);
                     }
                     return;
                 }
             }
 
             if code == KeyCode::Enter {
-                if let Some(path) = self.file_tree_state.borrow().selected_path() {
-                    let path = path.to_path_buf();
+                let selected = self.file_tree_state.borrow().selected_path().map(|p| p.to_path_buf());
+                if let Some(path) = selected {
                     self.selected_file = Some(path.clone());
                     let content = std::fs::read_to_string(&path)
                         .unwrap_or_else(|e| format!("Error reading file: {}", e));
@@ -1366,9 +1371,11 @@ impl MultiPanelApp {
                         .as_ref()
                         .and_then(|p| self.file_view_scrolls.get(p).copied())
                         .unwrap_or(0);
-                    if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
-                        git.fetch_diff(&path);
-                        git.fetch_blame(&path);
+                    if let Some(path) = self.selected_file.clone() {
+                        if let Some(git) = &mut self.git {
+                            git.fetch_diff(&path);
+                        }
+                        self.fetch_blame(&path);
                     }
                 }
                 return;
@@ -1395,8 +1402,8 @@ impl MultiPanelApp {
 
         // Load the selected file into the main panel on Enter (left closed).
         if matches!(code, KeyCode::Enter) {
-            if let Some(path) = self.file_tree_state.borrow().selected_path() {
-                let path = path.to_path_buf();
+            let selected = self.file_tree_state.borrow().selected_path().map(|p| p.to_path_buf());
+            if let Some(path) = selected {
                 self.selected_file = Some(path.clone());
                 let content = std::fs::read_to_string(&path)
                     .unwrap_or_else(|e| format!("Error reading file: {}", e));
@@ -1407,9 +1414,11 @@ impl MultiPanelApp {
                 } else {
                     content
                 };
-                if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
-                    git.fetch_diff(&path);
-                    git.fetch_blame(&path);
+                if let Some(path) = self.selected_file.clone() {
+                    if let Some(git) = &mut self.git {
+                        git.fetch_diff(&path);
+                    }
+                    self.fetch_blame(&path);
                 }
             }
             return;
@@ -1525,8 +1534,8 @@ impl MultiPanelApp {
                 if (self.main_active || self.selected_file.is_some()) && !left_open && right_closed
                 {
                     self.state.right_sidebar.toggle_between(0.0, 1.0);
-                    if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
-                        git.fetch_blame(&path);
+                    if let Some(path) = self.selected_file.clone() {
+                        self.fetch_blame(&path);
                     }
                     return;
                 }
@@ -1705,10 +1714,19 @@ impl MultiPanelApp {
                 .as_ref()
                 .and_then(|p| self.file_view_scrolls.get(p).copied())
                 .unwrap_or(0);
-            if let (Some(git), Some(path)) = (&mut self.git, self.selected_file.clone()) {
-                git.fetch_diff(&path);
-                git.fetch_blame(&path);
+            if let Some(path) = self.selected_file.clone() {
+                if let Some(git) = &mut self.git {
+                    git.fetch_diff(&path);
+                }
+                self.fetch_blame(&path);
             }
+        }
+    }
+
+    /// Fetch git blame for `path` and reset the blame scroll offset.
+    pub fn fetch_blame(&mut self, path: &std::path::Path) {
+        if let Some(git) = &mut self.git {
+            git.fetch_blame(path);
         }
     }
 
@@ -2009,11 +2027,12 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         })
         .right_content({
             let git_blame_text = git_blame_text.clone();
+            let blame_scroll = app.main_scroll;
             move |_state, area, buf| {
                 if let Some(blame) = &git_blame_text {
                     let p = Paragraph::new(blame.clone())
                         .wrap(ratatui::widgets::Wrap { trim: false })
-                        .scroll((0, 0));
+                        .scroll((blame_scroll as u16, 0));
                     Widget::render(p, area, buf);
                 } else {
                     let p = Paragraph::new("right →").alignment(Alignment::Right);

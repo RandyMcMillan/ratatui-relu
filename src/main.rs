@@ -133,6 +133,15 @@ fn run_app(
                                 term.write_input(&bytes);
                             }
                         }
+                    } else if app.state.right_sidebar.target() > 0.5
+                        && (key.code == crossterm::event::KeyCode::PageUp
+                            || key.code == crossterm::event::KeyCode::PageDown)
+                    {
+                        if key.code == crossterm::event::KeyCode::PageUp {
+                            app.main_scroll = app.main_scroll.saturating_sub(10);
+                        } else {
+                            app.main_scroll = app.main_scroll.saturating_add(10);
+                        }
                     } else if key.code == crossterm::event::KeyCode::Char('e') {
                         if let Some(path) = app.selected_file.clone() {
                             // Suspend the TUI and launch the user's editor.
