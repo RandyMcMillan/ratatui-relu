@@ -1795,9 +1795,10 @@ impl MultiPanelApp {
                     self.show_terminal = false;
                     self.show_keyboard = false;
                     self.footer_terminal_focus = false;
-                    // Collapse the settings footer so the keyboard closes with
-                    // the settings overlay.
+                    // Collapse the settings footer immediately so the keyboard
+                    // closes with the settings overlay.
                     self.settings_state.footer.set_target(0.0);
+                    self.settings_state.footer.snap();
                 }
                 crossterm::event::KeyCode::Char('\\') => {
                     // toggle settings only
@@ -1829,6 +1830,34 @@ impl MultiPanelApp {
             return;
         }
         match (key.code, key.modifiers) {
+            // Settings overlay with keyboard.
+            (KeyCode::Char('s'), m) if m.contains(KeyModifiers::SHIFT) => {
+                self.show_settings = !self.show_settings;
+                if self.show_settings {
+                    self.show_keyboard = true;
+                    self.settings_state.footer.set_target(1.0);
+                } else {
+                    self.show_keyboard = false;
+                    self.settings_state.footer.set_target(0.0);
+                }
+            }
+            // Toggle the on-screen keyboard. Opens the settings overlay when
+            // invoked from elsewhere in the app so the keyboard has a place to
+            // render.
+            (KeyCode::Char('k'), m) if m.contains(KeyModifiers::SHIFT) => {
+                if !self.show_settings {
+                    self.show_settings = true;
+                    self.show_keyboard = true;
+                    self.settings_state.footer.set_target(1.0);
+                } else {
+                    self.show_keyboard = !self.show_keyboard;
+                    if self.show_keyboard {
+                        self.settings_state.footer.set_target(1.0);
+                    } else {
+                        self.settings_state.footer.set_target(0.0);
+                    }
+                }
+            }
             // Grid Mode
             (KeyCode::Char('g'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_grid = !self.show_grid;
@@ -2511,6 +2540,36 @@ pub fn demo_widget_builder(app: &MultiPanelApp) -> MultiPanel {
         .right_sidebar_width_fraction(right_fraction)
 }
 
+const FOOTER_DISMISS: &str = "Press \\ or q/Esc to dismiss";
+const FOOTER_CLOSE: &str = "Press \\ to close";
+
+/// Reusable footer content: shows the on-screen keyboard when requested,
+/// otherwise a centered dismiss hint.
+fn keyboard_footer_content(
+    show_keyboard: bool,
+    keyboard_state: Rc<RefCell<KeyboardState>>,
+) -> impl Fn(&mut MultiPanelState, Rect, &mut Buffer) + 'static {
+    move |_state, area, buf| {
+        if show_keyboard {
+            use ratatui::widgets::StatefulWidget;
+            let widget = KeyboardWidget::default();
+            let mut st = keyboard_state.borrow_mut();
+            StatefulWidget::render(widget, area, buf, &mut st);
+        } else {
+            let p = Paragraph::new(FOOTER_DISMISS).alignment(Alignment::Center);
+            Widget::render(p, area, buf);
+        }
+    }
+}
+
+/// Reusable footer content that just shows the dismiss hint.
+fn dismiss_footer_content() -> impl Fn(&mut MultiPanelState, Rect, &mut Buffer) + 'static {
+    move |_state, area, buf| {
+        let p = Paragraph::new(FOOTER_DISMISS).alignment(Alignment::Center);
+        Widget::render(p, area, buf);
+    }
+}
+
 /// The built-in settings widget builder. Renders settings inside a
 /// multi-panel layout matching the help overlay.
 pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
@@ -2535,7 +2594,7 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .left_title("Options")
         .right_title("Info")
         .main_title("")
-        .footer_title("Press \\ or q/Esc to dismiss")
+        .footer_title(FOOTER_DISMISS)
         .header_content(|_state, area, buf| {
             let p = Paragraph::new("ratatui-relu settings")
                 .alignment(Alignment::Center)
@@ -2560,7 +2619,6 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
             let table_state = _app.state_help_table_state.clone();
             let show_state_table = _app.show_state_table;
             let show_keyboard = _app.show_keyboard;
-            let keyboard_state = _app.keyboard_state.clone();
             let bits = state_bits(_app);
             let rows = [
                 ("7", "Top (header)", if (bits >> 7) & 1 == 1 { "1" } else { "0" }, if (bits >> 7) & 1 == 1 { "open" } else { "closed" }),
@@ -2638,21 +2696,7 @@ pub fn settings_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
             }
         })
         .statusbar_content(make_statusbar_content("Settings".to_string(), _app))
-        .footer_content({
-            let show_keyboard = _app.show_keyboard;
-            let keyboard_state = _app.keyboard_state.clone();
-            move |_state, area, buf| {
-                if show_keyboard {
-                    use ratatui::widgets::StatefulWidget;
-                    let widget = KeyboardWidget::default();
-                    let mut st = keyboard_state.borrow_mut();
-                    StatefulWidget::render(widget, area, buf, &mut st);
-                } else {
-                    let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
-                    Widget::render(p, area, buf);
-                }
-            }
-        })
+        .footer_content(keyboard_footer_content(_app.show_keyboard, _app.keyboard_state.clone()))
         .header_color(Color::Cyan)
         .left_color(Color::Green)
         .right_color(Color::Magenta)
@@ -2676,7 +2720,7 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
         .left_title("About")
         .right_title("Tips")
         .main_title("Main")
-        .footer_title("Press \\ to close")
+        .footer_title(FOOTER_CLOSE)
         .header_content(|_state, area, buf| {
             let p = Paragraph::new("ratatui-relu help overlay")
                 .alignment(Alignment::Center)
@@ -2711,10 +2755,8 @@ pub fn help_widget_builder(_app: &MultiPanelApp) -> MultiPanel {
                 StatefulWidget::render(table.clone(), chunks[0], buf, &mut table_state.borrow_mut()); // table in top half
                 StatefulWidget::render(widget, chunks[1], buf, &mut st); // keyboard in bottom half
             }
-        })        .footer_content(|_state, area, buf| {
-            let p = Paragraph::new("Press \\ or q/Esc to dismiss").alignment(Alignment::Center);
-            Widget::render(p, area, buf);
         })
+        .footer_content(dismiss_footer_content())
         .header_color(Color::Cyan)
         .left_color(Color::Green)
         .right_color(Color::Magenta)
