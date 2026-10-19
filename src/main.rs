@@ -5,6 +5,7 @@
 //! Run in a real terminal with: cargo run
 
 use std::io::{self, Stdout, stdout};
+use std::path::PathBuf;
 use std::time::Instant;
 
 use crossterm::{
@@ -16,7 +17,7 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 
 use ratatui_relu::{
     mouse::{disable_mouse_capture, enable_mouse_capture},
-    multi_panel::MultiPanelApp,
+    multi_panel::{AppCommand, MultiPanelApp},
 };
 
 fn setup_terminal() -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
@@ -62,160 +63,23 @@ fn run_app(
         if event::poll(std::time::Duration::from_millis(16))? {
             match event::read()? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    if app.footer_terminal_focus {
-                        if key.code == crossterm::event::KeyCode::Esc {
-                            app.footer_terminal_focus = false;
-                        } else if key.code == crossterm::event::KeyCode::Up {
-                            if let Some(term) = &mut *app.terminal.borrow_mut() {
-                                term.scroll_up(5);
+                    if let Some(command) = app.handle_key_event(key) {
+                        match command {
+                            AppCommand::Exit => break,
+                            AppCommand::EditConfig => {
+                                if let Some(path) = MultiPanelApp::default_config_path() {
+                                    launch_editor(terminal, path)?;
+                                }
                             }
-                        } else if key.code == crossterm::event::KeyCode::Down {
-                            if let Some(term) = &mut *app.terminal.borrow_mut() {
-                                term.scroll_down(5);
-                            }
-                        } else if key.code == crossterm::event::KeyCode::PageUp {
-                            if let Some(term) = &mut *app.terminal.borrow_mut() {
-                                term.scroll_up(10);
-                            }
-                        } else if key.code == crossterm::event::KeyCode::PageDown {
-                            if let Some(term) = &mut *app.terminal.borrow_mut() {
-                                term.scroll_down(10);
-                            }
-                        } else {
-                            let bytes = match key.code {
-                                crossterm::event::KeyCode::Char(c) => {
-                                    if key
-                                        .modifiers
-                                        .contains(crossterm::event::KeyModifiers::CONTROL)
-                                    {
-                                        vec![c as u8 & 0x1f]
-                                    } else {
-                                        c.to_string().into_bytes()
+                            AppCommand::EditSelectedFile => {
+                                if let Some(path) = app.selected_file.clone() {
+                                    launch_editor(terminal, path.clone())?;
+                                    if let Ok(content) = std::fs::read_to_string(&path) {
+                                        app.file_preview = content;
                                     }
                                 }
-                                crossterm::event::KeyCode::Enter => vec![b'\n'],
-                                crossterm::event::KeyCode::Backspace => vec![0x7f],
-                                crossterm::event::KeyCode::Tab => vec![b'\t'],
-                                _ => vec![],
-                            };
-                            if let Some(term) = &mut *app.terminal.borrow_mut() {
-                                term.write_input(&bytes);
                             }
                         }
-                    } else if app.show_terminal {
-                        if key.code == crossterm::event::KeyCode::Esc {
-                            app.show_terminal = false;
-                        } else if key.code == crossterm::event::KeyCode::PageUp {
-                            if let Some(term) = &mut *app.terminal.borrow_mut() {
-                                term.scroll_up(10);
-                            }
-                        } else if key.code == crossterm::event::KeyCode::PageDown {
-                            if let Some(term) = &mut *app.terminal.borrow_mut() {
-                                term.scroll_down(10);
-                            }
-                        } else {
-                            // Send keystroke to terminal.
-                            let bytes = match key.code {
-                                crossterm::event::KeyCode::Char(c) => {
-                                    if key
-                                        .modifiers
-                                        .contains(crossterm::event::KeyModifiers::CONTROL)
-                                    {
-                                        vec![c as u8 & 0x1f]
-                                    } else {
-                                        c.to_string().into_bytes()
-                                    }
-                                }
-                                crossterm::event::KeyCode::Enter => vec![b'\n'],
-                                crossterm::event::KeyCode::Backspace => vec![0x7f],
-                                crossterm::event::KeyCode::Tab => vec![b'\t'],
-                                _ => vec![],
-                            };
-                            if let Some(term) = &mut *app.terminal.borrow_mut() {
-                                term.write_input(&bytes);
-                            }
-                        }
-                    } else if app.state.right_sidebar.target() > 0.5
-                        && (key.code == crossterm::event::KeyCode::PageUp
-                            || key.code == crossterm::event::KeyCode::PageDown)
-                    {
-                        if key.code == crossterm::event::KeyCode::PageUp {
-                            app.main_scroll = app.main_scroll.saturating_sub(10);
-                        } else {
-                            app.main_scroll = app.main_scroll.saturating_add(10);
-                        }
-                    } else if app.show_settings && key.code == crossterm::event::KeyCode::Char('e') {
-                        let path = MultiPanelApp::default_config_path();
-                        if let Some(path) = path {
-                            disable_mouse_capture()?;
-                            disable_raw_mode()?;
-                            terminal.backend_mut().execute(LeaveAlternateScreen)?;
-                            let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
-                            let _ = std::process::Command::new(&editor).arg(&path).status();
-                            stdout().execute(EnterAlternateScreen)?;
-                            enable_raw_mode()?;
-                            enable_mouse_capture()?;
-                            terminal.clear()?;
-                        }
-                    } else if key.code == crossterm::event::KeyCode::Char('e') {
-                        if let Some(path) = app.selected_file.clone() {
-                            // Suspend the TUI and launch the user's editor.
-                            disable_mouse_capture()?;
-                            disable_raw_mode()?;
-                            terminal.backend_mut().execute(LeaveAlternateScreen)?;
-                            let editor =
-                                std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
-                            let _ = std::process::Command::new(&editor).arg(&path).status();
-                            // Restore the TUI.
-                            stdout().execute(EnterAlternateScreen)?;
-                            enable_raw_mode()?;
-                            enable_mouse_capture()?;
-                            terminal.clear()?;
-                            // Reload the preview after editing.
-                            if let Ok(content) = std::fs::read_to_string(&path) {
-                                app.file_preview = content;
-                            }
-                        }
-                    } else if key.code == crossterm::event::KeyCode::Esc {
-                        // Back out of everything without quitting.
-                        if app.show_settings {
-                            app.show_settings = false;
-                            app.show_keyboard = false;
-                            app.file_tree_focus = false;
-                            // Collapse the settings footer so the keyboard closes
-                            // with the settings overlay.
-                            app.settings_state.footer.set_target(0.0);
-                            app.settings_state.footer.snap();
-                        } else {
-                            app.show_help = false;
-                            app.show_settings = false;
-                            app.show_terminal = false;
-                            if app.right_full {
-                                app.right_full = false;
-                            } else if app.right_boost {
-                                app.right_boost = false;
-                            } else if app.state.right_sidebar.target() > 0.5 {
-                                app.state.right_sidebar.set_target(0.0);
-                            } else if app.main_boost {
-                                app.main_boost = false;
-                            } else {
-                                app.main_active = false;
-                            }
-                            app.file_tree_focus = false;
-                        }
-                    } else if key
-                        .modifiers
-                        .contains(crossterm::event::KeyModifiers::SHIFT)
-                        && matches!(
-                            key.code,
-                            crossterm::event::KeyCode::Char('Q')
-                                | crossterm::event::KeyCode::Char('P')
-                        )
-                    {
-                        break;
-                    } else {
-                        app.handle_key_event(key);
-                        // Esc does not quit the app; it only closes overlays/deactivates views.
                     }
                     // Repaint immediately after a key press so state changes
                     // are visible right away.
@@ -228,5 +92,22 @@ fn run_app(
             }
         }
     }
+    Ok(())
+}
+
+/// Suspend the TUI, open `path` in `$EDITOR`, then resume.
+fn launch_editor(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    path: PathBuf,
+) -> io::Result<()> {
+    disable_mouse_capture()?;
+    disable_raw_mode()?;
+    terminal.backend_mut().execute(LeaveAlternateScreen)?;
+    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
+    let _ = std::process::Command::new(&editor).arg(&path).status();
+    stdout().execute(EnterAlternateScreen)?;
+    enable_raw_mode()?;
+    enable_mouse_capture()?;
+    terminal.clear()?;
     Ok(())
 }
