@@ -1795,6 +1795,9 @@ impl MultiPanelApp {
                     self.show_terminal = false;
                     self.show_keyboard = false;
                     self.footer_terminal_focus = false;
+                    // Collapse the settings footer so the keyboard closes with
+                    // the settings overlay.
+                    self.settings_state.footer.set_target(0.0);
                 }
                 crossterm::event::KeyCode::Char('\\') => {
                     // toggle settings only
