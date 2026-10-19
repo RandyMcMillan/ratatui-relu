@@ -382,19 +382,75 @@ impl StatefulWidget for KeyboardWidget {
             }
         }
 
+        // Base dimensions for a 1x-scale keyboard.
+        const BASE_KEY_WIDTH: u16 = 5;
+        const BASE_SPACE_WIDTH: u16 = 15;
+        const BASE_KEY_HEIGHT: u16 = 3;
+        const BASE_GAP: u16 = 1;
+
+        // Compute the width of the widest row at 1x scale.
+        let max_base_row_width: u16 = self
+            .rows
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|k| if *k == ' ' { BASE_SPACE_WIDTH } else { BASE_KEY_WIDTH })
+                    .sum::<u16>()
+                    .saturating_add((row.len() as u16).saturating_sub(1))
+            })
+            .max()
+            .unwrap_or(0);
+
+        // Total height at 1x scale: rows of keys plus gaps between them.
+        let total_base_height: u16 = (self.rows.len() as u16)
+            .saturating_mul(BASE_KEY_HEIGHT + BASE_GAP)
+            .saturating_sub(BASE_GAP);
+
+        // Pick a single global scale that fits both the width and the height.
+        let scale_x = if max_base_row_width > 0 {
+            area.width / max_base_row_width
+        } else {
+            1
+        };
+        let scale_y = if total_base_height > 0 {
+            area.height / total_base_height
+        } else {
+            1
+        };
+        let scale = scale_x.min(scale_y).max(1);
+
+        // If the chosen scale still doesn't fit vertically (e.g. the terminal
+        // is shorter than the 1x keyboard), switch to a compact layout that
+        // removes vertical gaps and distributes the height evenly.
+        let scaled_total_height = total_base_height.saturating_mul(scale);
+        let rows = self.rows.len() as u16;
+        let (key_height, v_gap) = if scaled_total_height <= area.height {
+            (
+                BASE_KEY_HEIGHT.saturating_mul(scale),
+                BASE_GAP.saturating_mul(scale),
+            )
+        } else {
+            let h = (area.height / rows).max(1);
+            let gap = if h.saturating_mul(rows)
+                .saturating_add(rows.saturating_sub(1))
+                <= area.height
+            {
+                1
+            } else {
+                0
+            };
+            (h, gap)
+        };
+
+        let h_gap = scale.max(1);
+
         for row in &self.rows {
             let base_row_width: u16 = row
                 .iter()
-                .map(|k| if *k == ' ' { 15u16 } else { 5u16 })
+                .map(|k| if *k == ' ' { BASE_SPACE_WIDTH } else { BASE_KEY_WIDTH })
                 .sum::<u16>()
                 .saturating_add((row.len() as u16).saturating_sub(1));
-            // Scale keys to fill the available width while keeping proportions.
-            let scale = if base_row_width > 0 {
-                (area.width / base_row_width).max(1)
-            } else {
-                1
-            };
-            let row_width: u16 = base_row_width.saturating_mul(scale);
+            let row_width = base_row_width.saturating_mul(scale);
             let indent = area.width.saturating_sub(row_width) / 2;
             let mut x = area.x + indent;
 
@@ -428,12 +484,11 @@ impl StatefulWidget for KeyboardWidget {
                         }
                     }
                 };
-                let base_w: u16 = if *key == ' ' { 15 } else { 5 };
-                let w: u16 = base_w.saturating_mul(scale).max(base_w);
-                let h: u16 = 3;
-                let btn_area = Rect::new(x, y, w, h);
+                let base_w: u16 = if *key == ' ' { BASE_SPACE_WIDTH } else { BASE_KEY_WIDTH };
+                let w = base_w.saturating_mul(scale).max(base_w);
+                let btn_area = Rect::new(x, y, w, key_height);
 
-                if x + w <= area.x + area.width && y + h <= area.y + area.height {
+                if x + w <= area.x + area.width && y + key_height <= area.y + area.height {
                     let st = state
                         .button_states
                         .get(idx)
@@ -446,9 +501,9 @@ impl StatefulWidget for KeyboardWidget {
                     button.render(btn_area, buf);
                 }
                 idx += 1;
-                x += w + scale.max(1);
+                x += w + h_gap;
             }
-            y += 4;
+            y += key_height + v_gap;
             if y >= area.y + area.height {
                 break;
             }
