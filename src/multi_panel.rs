@@ -1884,19 +1884,19 @@ impl MultiPanelApp {
                 self.show_keyboard = false;
                 self.settings_state.footer.set_target(0.0);
             }
-            // Toggle the on-screen keyboard.
+            // Toggle the on-screen keyboard. In settings/help it controls the
+            // settings footer; elsewhere it draws a global overlay so the
+            // keyboard can be used while the file tree is visible.
             (KeyCode::Char('k'), m) if m.contains(KeyModifiers::SHIFT) => {
-                if !self.show_settings {
-                    self.show_settings = true;
-                    self.show_keyboard = true;
-                    self.settings_state.footer.set_target(1.0);
-                } else {
+                if self.show_help || self.show_settings {
                     self.show_keyboard = !self.show_keyboard;
                     if self.show_keyboard {
                         self.settings_state.footer.set_target(1.0);
                     } else {
                         self.settings_state.footer.set_target(0.0);
                     }
+                } else {
+                    self.show_keyboard = !self.show_keyboard;
                 }
             }
             // Grid Mode
@@ -2041,7 +2041,7 @@ impl MultiPanelApp {
     /// Handle a mouse event. When the help overlay is open, clicks on the
     /// interactive state table toggle the corresponding panel or boost flag.
     pub fn handle_mouse(&mut self, event: MouseEvent) {
-        if self.show_help || self.show_settings {
+        if self.show_help || self.show_settings || self.show_keyboard {
             let state = self.state_help_table_state.clone();
             state.borrow_mut().handle_mouse(event, self);
             let kb = self.keyboard_state.clone();
@@ -2310,6 +2310,24 @@ impl MultiPanelApp {
         } else {
             let widget = (self.config.widget_builder)(self);
             f.render_stateful_widget(widget, f.area(), &mut self.state);
+
+            // Global on-screen keyboard overlay. Allows typing via the on-screen
+            // keyboard while the file tree and main content remain visible.
+            if self.show_keyboard {
+                use ratatui::layout::Constraint;
+                use ratatui::widgets::StatefulWidget;
+                let area = f.area();
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Min(0),
+                        Constraint::Percentage(33),
+                    ])
+                    .split(area);
+                let widget = KeyboardWidget::default();
+                let mut st = self.keyboard_state.borrow_mut();
+                StatefulWidget::render(widget, chunks[1], f.buffer_mut(), &mut st);
+            }
         }
     }
 
