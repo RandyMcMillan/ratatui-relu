@@ -384,10 +384,9 @@ impl StatefulWidget for KeyboardWidget {
 
         // Responsive breakpoints for the keyboard widget.
         //
-        // These numbers are widget-area targets that correspond to the terminal
-        // sizes the user specified (61×43 with labels, 73×31 without). In the
-        // current app layout the keyboard is rendered inside a bordered footer,
-        // so the widget area is smaller than the terminal by a few rows/cols.
+        // The numbers below are terminal sizes on macOS System Terminal. The
+        // keyboard is rendered inside a bordered footer, so the widget's area
+        // is smaller: width = terminal - 2, height = (terminal - 3)/2 - 2.
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         enum Mode {
             Hidden,
@@ -395,7 +394,9 @@ impl StatefulWidget for KeyboardWidget {
             Labeled,
         }
 
-        let mode = if area.width >= 59 && area.height >= 18 {
+        // Terminal minimum: 73×31 -> area ~71×12.
+        // Terminal labeled: 73×43 -> area ~71×18.
+        let mode = if area.width >= 71 && area.height >= 18 {
             Mode::Labeled
         } else if area.width >= 71 && area.height >= 12 {
             Mode::Unlabeled
@@ -413,33 +414,35 @@ impl StatefulWidget for KeyboardWidget {
         // Base dimensions depend on the responsive mode.
         let (base_key_width, base_space_width, base_key_height) = match mode {
             Mode::Labeled => (3, 9, 3),
-            Mode::Unlabeled => (4, 12, 2),
+            Mode::Unlabeled => (3, 9, 2),
             Mode::Hidden => unreachable!(),
         };
         const BASE_GAP: u16 = 1;
-
-        // Compute the width of the widest row at 1x scale.
-        let max_base_row_width: u16 = self
-            .rows
-            .iter()
-            .map(|row| {
-                row.iter()
-                    .map(|k| if *k == ' ' { base_space_width } else { base_key_width })
-                    .sum::<u16>()
-                    .saturating_add((row.len() as u16).saturating_sub(1))
-            })
-            .max()
-            .unwrap_or(0);
 
         // Total height at 1x scale: rows of keys plus gaps between them.
         let total_base_height: u16 = (self.rows.len() as u16)
             .saturating_mul(base_key_height + BASE_GAP)
             .saturating_sub(BASE_GAP);
 
-        // Scale horizontally so each row fills the available width. Height is
-        // handled separately via the compact fallback below.
-        let scale = if max_base_row_width > 0 {
-            (area.width / max_base_row_width).max(1)
+        // Discrete width breakpoints, derived from the terminal widths the user
+        // supplied. Terminal widths are converted to widget-area widths by
+        // subtracting the 2-cell footer border.
+        let scale = if area.width >= 495 {
+            9
+        } else if area.width >= 440 {
+            8
+        } else if area.width >= 385 {
+            7
+        } else if area.width >= 330 {
+            6
+        } else if area.width >= 275 {
+            5
+        } else if area.width >= 220 {
+            4
+        } else if area.width >= 165 {
+            3
+        } else if area.width >= 110 {
+            2
         } else {
             1
         };
