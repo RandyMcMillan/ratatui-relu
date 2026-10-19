@@ -337,6 +337,22 @@ impl KeyboardState {
     }
 }
 
+/// A clickable, responsive virtual keyboard.
+///
+/// The keyboard adapts to the allocated terminal area:
+///
+/// * **Minimum size** — hides itself below the equivalent of a `73×31`
+///   terminal (about `71×12` widget area after borders).
+/// * **Labels** — shown when the area is tall enough for the equivalent of a
+///   `73×43` terminal (about `71×18` widget area).
+/// * **Width scaling** — snaps to discrete scale levels at terminal widths
+///   `497, 442, 387, 332, 277, 222, 167, 112, 73`. Each step corresponds to
+///   one additional scale unit for a base key-width of 3 cells.
+/// * **Height scaling** — keys are stretched vertically to fill the available
+///   height rather than staying fixed at 3 rows.
+///
+/// The area conversion above assumes the widget is rendered inside the
+/// bordered footer used by the current `MultiPanel` layout.
 #[derive(Debug, Clone)]
 pub struct KeyboardWidget {
     pub rows: Vec<Vec<char>>,
@@ -382,11 +398,20 @@ impl StatefulWidget for KeyboardWidget {
             }
         }
 
-        // Responsive breakpoints for the keyboard widget.
+        // Responsive display mode.
         //
-        // The numbers below are terminal sizes on macOS System Terminal. The
-        // keyboard is rendered inside a bordered footer, so the widget's area
-        // is smaller: width = terminal - 2, height = (terminal - 3)/2 - 2.
+        // The thresholds are widget-area values that correspond to the user's
+        // target terminal sizes on macOS System Terminal. The keyboard is drawn
+        // inside a bordered footer, so the widget area is smaller than the
+        // terminal:
+        //
+        //   widget_width  = terminal_width - 2
+        //   widget_height = (terminal_height - 3) / 2 - 2
+        //
+        // Mode selection:
+        //   Labeled   : width >= 71 && height >= 18  (terminal 73×43+)
+        //   Unlabeled : width >= 71 && height >= 12  (terminal 73×31+)
+        //   Hidden    : otherwise
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         enum Mode {
             Hidden,
@@ -394,8 +419,6 @@ impl StatefulWidget for KeyboardWidget {
             Labeled,
         }
 
-        // Terminal minimum: 73×31 -> area ~71×12.
-        // Terminal labeled: 73×43 -> area ~71×18.
         let mode = if area.width >= 71 && area.height >= 18 {
             Mode::Labeled
         } else if area.width >= 71 && area.height >= 12 {
@@ -411,22 +434,33 @@ impl StatefulWidget for KeyboardWidget {
             return;
         }
 
-        // Base dimensions depend on the responsive mode.
+        // Base cell dimensions for a 1×-scale key.
+        //
+        // The space bar is 3× the width of a normal key so it remains visually
+        // distinct at every scale. Unlabeled mode uses a shorter key because
+        // text is not drawn inside the keys.
         let (base_key_width, base_space_width, base_key_height) = match mode {
             Mode::Labeled => (3, 9, 3),
             Mode::Unlabeled => (3, 9, 2),
             Mode::Hidden => unreachable!(),
         };
-        const BASE_GAP: u16 = 1;
 
-        // Total height at 1x scale: rows of keys plus gaps between them.
-        let total_base_height: u16 = (self.rows.len() as u16)
-            .saturating_mul(base_key_height + BASE_GAP)
-            .saturating_sub(BASE_GAP);
-
-        // Discrete width breakpoints, derived from the terminal widths the user
-        // supplied. Terminal widths are converted to widget-area widths by
-        // subtracting the 2-cell footer border.
+        // Discrete width scale, derived from terminal-width breakpoints.
+        //
+        // The user supplied terminal widths; we subtract the 2-cell footer
+        // border to get widget-area widths. The widest row at 1× scale is
+        // 14 keys × 3 cells + 13 gaps = 55 cells, so each breakpoint adds one
+        // additional scale unit.
+        //
+        //   terminal 497 -> area 495 -> scale 9
+        //   terminal 442 -> area 440 -> scale 8
+        //   terminal 387 -> area 385 -> scale 7
+        //   terminal 332 -> area 330 -> scale 6
+        //   terminal 277 -> area 275 -> scale 5
+        //   terminal 222 -> area 220 -> scale 4
+        //   terminal 167 -> area 165 -> scale 3
+        //   terminal 112 -> area 110 -> scale 2
+        //   terminal  73 -> area  71 -> scale 1
         let scale = if area.width >= 495 {
             9
         } else if area.width >= 440 {
@@ -447,26 +481,26 @@ impl StatefulWidget for KeyboardWidget {
             1
         };
 
-        // If the 1x keyboard doesn't fit vertically, switch to a compact
-        // layout that removes vertical gaps and distributes the height evenly.
+        // Vertical layout: fill the available height.
+        //
+        // Rather than fixing keys at 3 rows tall, we divide the widget's height
+        // evenly across the six rows and use any leftover space as gaps. The
+        // key height is never allowed to drop below the mode minimum, which
+        // keeps labels readable in labeled mode.
         let rows = self.rows.len() as u16;
-        let (key_height, v_gap) = if total_base_height <= area.height {
-            (base_key_height, BASE_GAP)
+        let key_height = (area.height / rows).max(base_key_height).max(1);
+        let v_gap = if rows > 1 {
+            (area.height.saturating_sub(key_height.saturating_mul(rows)))
+                .saturating_div(rows.saturating_sub(1))
         } else {
-            let h = (area.height / rows).max(1);
-            let gap = if h.saturating_mul(rows)
-                .saturating_add(rows.saturating_sub(1))
-                <= area.height
-            {
-                1
-            } else {
-                0
-            };
-            (h, gap)
+            0
         };
 
+        // Horizontal gap matches the width scale so wider keyboards also have
+        // wider spacing between keys.
         let h_gap = scale.max(1);
 
+        // Render each row centered in the available width.
         for row in &self.rows {
             let base_row_width: u16 = row
                 .iter()
@@ -478,6 +512,9 @@ impl StatefulWidget for KeyboardWidget {
             let mut x = area.x + indent;
 
             for key in row {
+                // In unlabeled mode the keys are drawn as empty outlines.
+                // Otherwise, special keys get human-readable labels and regular
+                // keys show their character (honoring caps-lock).
                 let label = if mode == Mode::Unlabeled {
                     "".to_string()
                 } else {
@@ -515,6 +552,8 @@ impl StatefulWidget for KeyboardWidget {
                 let w = base_w.saturating_mul(scale).max(base_w);
                 let btn_area = Rect::new(x, y, w, key_height);
 
+                // Clip any keys that overflow the allocated area and record the
+                // rendered area so mouse interactions can map back to this key.
                 if x + w <= area.x + area.width && y + key_height <= area.y + area.height {
                     let st = state
                         .button_states
