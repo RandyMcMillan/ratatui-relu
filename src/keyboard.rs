@@ -382,10 +382,37 @@ impl StatefulWidget for KeyboardWidget {
             }
         }
 
-        // Base dimensions for a 1x-scale keyboard.
-        const BASE_KEY_WIDTH: u16 = 5;
-        const BASE_SPACE_WIDTH: u16 = 15;
-        const BASE_KEY_HEIGHT: u16 = 3;
+        // Responsive breakpoints for the keyboard widget.
+        //   61×43 -> smallest size that still shows key characters.
+        //   73×31 -> smallest size that shows keys (outlines only).
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum Mode {
+            Hidden,
+            Unlabeled,
+            Labeled,
+        }
+
+        let mode = if area.width >= 61 && area.height >= 43 {
+            Mode::Labeled
+        } else if area.width >= 73 && area.height >= 31 {
+            Mode::Unlabeled
+        } else {
+            Mode::Hidden
+        };
+
+        if mode == Mode::Hidden {
+            for slot in &mut state.last_areas {
+                *slot = None;
+            }
+            return;
+        }
+
+        // Base dimensions depend on the responsive mode.
+        let (base_key_width, base_space_width, base_key_height) = match mode {
+            Mode::Labeled => (3, 9, 3),
+            Mode::Unlabeled => (4, 12, 2),
+            Mode::Hidden => unreachable!(),
+        };
         const BASE_GAP: u16 = 1;
 
         // Compute the width of the widest row at 1x scale.
@@ -394,7 +421,7 @@ impl StatefulWidget for KeyboardWidget {
             .iter()
             .map(|row| {
                 row.iter()
-                    .map(|k| if *k == ' ' { BASE_SPACE_WIDTH } else { BASE_KEY_WIDTH })
+                    .map(|k| if *k == ' ' { base_space_width } else { base_key_width })
                     .sum::<u16>()
                     .saturating_add((row.len() as u16).saturating_sub(1))
             })
@@ -403,7 +430,7 @@ impl StatefulWidget for KeyboardWidget {
 
         // Total height at 1x scale: rows of keys plus gaps between them.
         let total_base_height: u16 = (self.rows.len() as u16)
-            .saturating_mul(BASE_KEY_HEIGHT + BASE_GAP)
+            .saturating_mul(base_key_height + BASE_GAP)
             .saturating_sub(BASE_GAP);
 
         // Pick a single global scale that fits both the width and the height.
@@ -419,14 +446,14 @@ impl StatefulWidget for KeyboardWidget {
         };
         let scale = scale_x.min(scale_y).max(1);
 
-        // If the chosen scale still doesn't fit vertically (e.g. the terminal
-        // is shorter than the 1x keyboard), switch to a compact layout that
-        // removes vertical gaps and distributes the height evenly.
+        // If the chosen scale still doesn't fit vertically (e.g. the allocated
+        // area is shorter than the 1x keyboard), switch to a compact layout
+        // that removes vertical gaps and distributes the height evenly.
         let scaled_total_height = total_base_height.saturating_mul(scale);
         let rows = self.rows.len() as u16;
         let (key_height, v_gap) = if scaled_total_height <= area.height {
             (
-                BASE_KEY_HEIGHT.saturating_mul(scale),
+                base_key_height.saturating_mul(scale),
                 BASE_GAP.saturating_mul(scale),
             )
         } else {
@@ -447,7 +474,7 @@ impl StatefulWidget for KeyboardWidget {
         for row in &self.rows {
             let base_row_width: u16 = row
                 .iter()
-                .map(|k| if *k == ' ' { BASE_SPACE_WIDTH } else { BASE_KEY_WIDTH })
+                .map(|k| if *k == ' ' { base_space_width } else { base_key_width })
                 .sum::<u16>()
                 .saturating_add((row.len() as u16).saturating_sub(1));
             let row_width = base_row_width.saturating_mul(scale);
@@ -455,36 +482,40 @@ impl StatefulWidget for KeyboardWidget {
             let mut x = area.x + indent;
 
             for key in row {
-                let label = match *key {
-                    ' ' => "Space".to_string(),
-                    '\x08' => "Bksp".to_string(),
-                    '\t' => "Tab".to_string(),
-                    '\n' => "Enter".to_string(),
-                    '\x14' => "Caps".to_string(),
-                    '\x1e' | '\x1f' => "Shift".to_string(),
-                    '\x11' => "Ctrl".to_string(),
-                    '\x12' => "Alt".to_string(),
-                    '\x10' => "Fn".to_string(),
-                    '\x1b' => "Esc".to_string(),
-                    '\x1c' => "←".to_string(),
-                    '\x1d' => "↓".to_string(),
-                    '\x1a' => "→".to_string(),
-                    c if (c as u32) >= 0xE001 && (c as u32) <= 0xE00C => {
-                        format!("F{}", (c as u32) - 0xE000)
-                    }
-                    _ => {
-                        if key.is_alphabetic() {
-                            if state.caps_lock {
-                                key.to_uppercase().to_string()
+                let label = if mode == Mode::Unlabeled {
+                    "".to_string()
+                } else {
+                    match *key {
+                        ' ' => "Space".to_string(),
+                        '\x08' => "Bksp".to_string(),
+                        '\t' => "Tab".to_string(),
+                        '\n' => "Enter".to_string(),
+                        '\x14' => "Caps".to_string(),
+                        '\x1e' | '\x1f' => "Shift".to_string(),
+                        '\x11' => "Ctrl".to_string(),
+                        '\x12' => "Alt".to_string(),
+                        '\x10' => "Fn".to_string(),
+                        '\x1b' => "Esc".to_string(),
+                        '\x1c' => "←".to_string(),
+                        '\x1d' => "↓".to_string(),
+                        '\x1a' => "→".to_string(),
+                        c if (c as u32) >= 0xE001 && (c as u32) <= 0xE00C => {
+                            format!("F{}", (c as u32) - 0xE000)
+                        }
+                        _ => {
+                            if key.is_alphabetic() {
+                                if state.caps_lock {
+                                    key.to_uppercase().to_string()
+                                } else {
+                                    key.to_lowercase().to_string()
+                                }
                             } else {
-                                key.to_lowercase().to_string()
+                                key.to_string()
                             }
-                        } else {
-                            key.to_string()
                         }
                     }
                 };
-                let base_w: u16 = if *key == ' ' { BASE_SPACE_WIDTH } else { BASE_KEY_WIDTH };
+                let base_w: u16 = if *key == ' ' { base_space_width } else { base_key_width };
                 let w = base_w.saturating_mul(scale).max(base_w);
                 let btn_area = Rect::new(x, y, w, key_height);
 
