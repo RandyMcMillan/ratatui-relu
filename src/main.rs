@@ -182,6 +182,10 @@ fn run_app(
                             app.show_settings = false;
                             app.show_keyboard = false;
                             app.file_tree_focus = false;
+                            // Collapse the settings footer so the keyboard closes
+                            // with the settings overlay.
+                            app.settings_state.footer.set_target(0.0);
+                            app.settings_state.footer.snap();
                         } else {
                             app.show_help = false;
                             app.show_settings = false;
