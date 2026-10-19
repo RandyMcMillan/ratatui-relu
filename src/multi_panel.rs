@@ -26,6 +26,19 @@ use crate::git::GitState;
 use crate::keyboard::{KeyboardState, KeyboardWidget};
 use crate::mouse::{ButtonState, is_mouse_over};
 use crate::terminal::TerminalState;
+
+/// Commands the app wants the host loop to execute on its behalf.
+///
+/// These actions need access to the terminal (suspend/resume) or should
+/// terminate the event loop, so they are returned from key handling instead of
+/// being performed inside [`MultiPanelApp`].
+#[derive(Debug, Clone)]
+pub enum AppCommand {
+    Exit,
+    EditConfig,
+    EditSelectedFile,
+}
+
 /// Mutable state for [`MultiPanel`].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MultiPanelState {
@@ -1782,69 +1795,96 @@ impl MultiPanelApp {
 
     /// Handle a full key event, distinguishing `Shift+` combinations.
     ///
-    /// Non-shifted keys are forwarded to [`Self::handle_key`]. Simulated keys
-    /// (arrow keys used by test mode) should keep using [`Self::handle_key`].
-    pub fn handle_key_event(&mut self, key: crossterm::event::KeyEvent) {
-        use crossterm::event::KeyModifiers;
+    /// Returns an [`AppCommand`] when the app needs the host loop to perform an
+    /// action such as exiting or launching an external editor.
+    pub fn handle_key_event(&mut self, key: crossterm::event::KeyEvent) -> Option<AppCommand> {
+        use crossterm::event::{KeyCode, KeyModifiers};
+
+        // Terminal focus modes consume keys first.
+        if self.footer_terminal_focus || self.show_terminal {
+            self.handle_terminal_key(key);
+            return None;
+        }
+
+        // Quit shortcuts.
+        if key.modifiers.contains(KeyModifiers::SHIFT)
+            && matches!(key.code, KeyCode::Char('Q') | KeyCode::Char('P'))
+        {
+            return Some(AppCommand::Exit);
+        }
+
+        // Editor launchers.
+        if key.code == KeyCode::Char('e') {
+            if self.show_settings {
+                return Some(AppCommand::EditConfig);
+            } else if self.selected_file.is_some() {
+                return Some(AppCommand::EditSelectedFile);
+            }
+        }
+
+        // Esc backs out of overlays without quitting.
+        if key.code == KeyCode::Esc {
+            self.handle_esc();
+            return None;
+        }
+
+        // Right-sidebar scrolling when the sidebar is open.
+        if self.state.right_sidebar.target() > 0.5
+            && matches!(key.code, KeyCode::PageUp | KeyCode::PageDown)
+        {
+            match key.code {
+                KeyCode::PageUp => self.main_scroll = self.main_scroll.saturating_sub(10),
+                KeyCode::PageDown => self.main_scroll = self.main_scroll.saturating_add(10),
+                _ => {}
+            }
+            return None;
+        }
+
         // Highlight the pressed key on the on-screen keyboard.
         self.keyboard_state.borrow_mut().press_key(key.code);
+
         // Help/Settings overlays have their own key handling.
         if self.show_help || self.show_settings {
             match key.code {
-                crossterm::event::KeyCode::Esc | crossterm::event::KeyCode::Char('q') => {
+                KeyCode::Char('q') => {
                     self.show_help = false;
                     self.show_settings = false;
                     self.show_terminal = false;
                     self.show_keyboard = false;
                     self.footer_terminal_focus = false;
-                    // Collapse the settings footer immediately so the keyboard
-                    // closes with the settings overlay.
                     self.settings_state.footer.set_target(0.0);
                     self.settings_state.footer.snap();
                 }
-                crossterm::event::KeyCode::Char('\\') => {
-                    // Toggle settings. The default state is footer/keyboard
-                    // closed, so reopening starts with the keyboard hidden.
+                KeyCode::Char('\\') => {
                     self.show_settings = !self.show_settings;
                     self.show_keyboard = false;
                     self.settings_state.footer.set_target(0.0);
                 }
-                // TODO filter blame view line numbers correctly
-                crossterm::event::KeyCode::Char('n') => {
-                    self.line_numbers = !self.line_numbers;
-                }
-                crossterm::event::KeyCode::Char('l') => {
-                    self.handle_key(KeyCode::Char('l'));
-                }
-                crossterm::event::KeyCode::Char('r') => {
-                    self.handle_key(KeyCode::Char('r'));
-                }
-                crossterm::event::KeyCode::Right => {
-                    self.show_state_table = !self.show_state_table;
-                }
-                crossterm::event::KeyCode::Up => {
+                KeyCode::Char('n') => self.line_numbers = !self.line_numbers,
+                KeyCode::Char('l') => self.handle_key(KeyCode::Char('l')),
+                KeyCode::Char('r') => self.handle_key(KeyCode::Char('r')),
+                KeyCode::Right => self.show_state_table = !self.show_state_table,
+                KeyCode::Up => {
                     self.show_keyboard = true;
                     self.settings_state.footer.set_target(1.0);
                 }
-                crossterm::event::KeyCode::Down => {
+                KeyCode::Down => {
                     self.show_keyboard = false;
                     self.settings_state.footer.set_target(0.0);
                 }
                 _ => self.handle_key(key.code),
             }
-            return;
+            return None;
         }
+
         match (key.code, key.modifiers) {
-            // Settings overlay. Default state is footer/keyboard closed;
-            // reopening starts fresh with the keyboard hidden.
+            // Settings overlay. Default state is footer/keyboard closed.
             (KeyCode::Char('s'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_settings = !self.show_settings;
                 self.show_keyboard = false;
                 self.settings_state.footer.set_target(0.0);
             }
-            // Toggle the on-screen keyboard. Opens the settings overlay when
-            // invoked from elsewhere in the app so the keyboard has a place to
-            // render.
+            // Toggle the on-screen keyboard.
             (KeyCode::Char('k'), m) if m.contains(KeyModifiers::SHIFT) => {
                 if !self.show_settings {
                     self.show_settings = true;
@@ -1863,7 +1903,7 @@ impl MultiPanelApp {
             (KeyCode::Char('g'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_grid = !self.show_grid;
             }
-            // Test Mode // NOTE 't' is top
+            // Test Mode
             (KeyCode::Char('t'), m) if m.contains(KeyModifiers::SHIFT) => {
                 if self.test_mode.is_some() {
                     self.stop_test_mode();
@@ -1879,37 +1919,31 @@ impl MultiPanelApp {
             (KeyCode::Char('m'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.chart_mode = !self.chart_mode;
             }
-            // Footer view f <-symetry-> h
-            // Footer view
+            // Footer view shortcuts
             (KeyCode::Char('f'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_terminal = !self.show_terminal;
                 if self.show_terminal {
                     self.terminal_cd_to_selection();
                 }
             }
-            // Footer view (bottom)
             (KeyCode::Char('h'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_terminal = !self.show_terminal;
                 if self.show_terminal {
                     self.terminal_cd_to_selection();
                 }
             }
-            // Footer view b <-symetry-> v
-            // Footer view (bottom)
             (KeyCode::Char('b'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_terminal = !self.show_terminal;
                 if self.show_terminal {
                     self.terminal_cd_to_selection();
                 }
             }
-            // Footer view (bottom)
             (KeyCode::Char('v'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_terminal = !self.show_terminal;
                 if self.show_terminal {
                     self.terminal_cd_to_selection();
                 }
             }
-            // should be x <--> n // TODO
             (KeyCode::Char('x'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_terminal = !self.show_terminal;
                 if self.show_terminal {
@@ -1918,6 +1952,90 @@ impl MultiPanelApp {
             }
             _ => self.handle_key(key.code),
         }
+
+        None
+    }
+
+    /// Dispatch keys to the embedded terminal when it has focus.
+    fn handle_terminal_key(&mut self, key: crossterm::event::KeyEvent) {
+        use crossterm::event::{KeyCode, KeyModifiers};
+
+        if key.code == KeyCode::Esc {
+            if self.footer_terminal_focus {
+                self.footer_terminal_focus = false;
+            } else {
+                self.show_terminal = false;
+            }
+            return;
+        }
+
+        match key.code {
+            KeyCode::Up | KeyCode::Down if self.footer_terminal_focus => {
+                if let Some(term) = &mut *self.terminal.borrow_mut() {
+                    if key.code == KeyCode::Up {
+                        term.scroll_up(5);
+                    } else {
+                        term.scroll_down(5);
+                    }
+                }
+            }
+            KeyCode::PageUp | KeyCode::PageDown => {
+                if let Some(term) = &mut *self.terminal.borrow_mut() {
+                    if key.code == KeyCode::PageUp {
+                        term.scroll_up(10);
+                    } else {
+                        term.scroll_down(10);
+                    }
+                }
+            }
+            _ => {
+                let bytes = match key.code {
+                    KeyCode::Char(c) => {
+                        if key.modifiers.contains(KeyModifiers::CONTROL) {
+                            vec![c as u8 & 0x1f]
+                        } else {
+                            c.to_string().into_bytes()
+                        }
+                    }
+                    KeyCode::Enter => vec![b'\n'],
+                    KeyCode::Backspace => vec![0x7f],
+                    KeyCode::Tab => vec![b'\t'],
+                    _ => vec![],
+                };
+                if !bytes.is_empty() {
+                    if let Some(term) = &mut *self.terminal.borrow_mut() {
+                        term.write_input(&bytes);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Close overlays and deactivate views when Esc is pressed.
+    fn handle_esc(&mut self) {
+        if self.show_settings {
+            self.show_settings = false;
+            self.show_keyboard = false;
+            self.footer_terminal_focus = false;
+            self.settings_state.footer.set_target(0.0);
+            self.settings_state.footer.snap();
+        } else {
+            self.show_help = false;
+            self.show_settings = false;
+            self.show_terminal = false;
+            if self.right_full {
+                self.right_full = false;
+            } else if self.right_boost {
+                self.right_boost = false;
+            } else if self.state.right_sidebar.target() > 0.5 {
+                self.state.right_sidebar.set_target(0.0);
+            } else if self.main_boost {
+                self.main_boost = false;
+            } else {
+                self.main_active = false;
+            }
+        }
+        self.file_tree_focus = false;
     }
 
     /// Handle a mouse event. When the help overlay is open, clicks on the
