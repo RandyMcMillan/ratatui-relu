@@ -1208,7 +1208,8 @@ impl MultiPanelApp {
             }
             app.settings_state = {
                 let mut s = MultiPanelState::open(8.0);
-                s.footer.set_target(1.0);
+                // Settings opens with the footer/keyboard closed by default.
+                s.footer.set_target(0.0);
                 s
             };
             if app.keyboard_state.borrow().keys.is_empty() {
@@ -1243,7 +1244,8 @@ impl MultiPanelApp {
             state,
             settings_state: {
                 let mut s = MultiPanelState::open(8.0);
-                s.footer.set_target(1.0);
+                // Settings opens with the footer/keyboard closed by default.
+                s.footer.set_target(0.0);
                 s
             },
             left_boost: false,
@@ -1276,7 +1278,7 @@ impl MultiPanelApp {
             show_settings: false,
             show_terminal: false,
             show_state_table: false,
-            show_keyboard: true,
+            show_keyboard: false,
             file_tree_focus: true,
             color_demo: false,
             color_demo_transition: None,
@@ -1801,8 +1803,11 @@ impl MultiPanelApp {
                     self.settings_state.footer.snap();
                 }
                 crossterm::event::KeyCode::Char('\\') => {
-                    // toggle settings only
+                    // Toggle settings. The default state is footer/keyboard
+                    // closed, so reopening starts with the keyboard hidden.
                     self.show_settings = !self.show_settings;
+                    self.show_keyboard = false;
+                    self.settings_state.footer.set_target(0.0);
                 }
                 // TODO filter blame view line numbers correctly
                 crossterm::event::KeyCode::Char('n') => {
@@ -1830,16 +1835,12 @@ impl MultiPanelApp {
             return;
         }
         match (key.code, key.modifiers) {
-            // Settings overlay with keyboard.
+            // Settings overlay. Default state is footer/keyboard closed;
+            // reopening starts fresh with the keyboard hidden.
             (KeyCode::Char('s'), m) if m.contains(KeyModifiers::SHIFT) => {
                 self.show_settings = !self.show_settings;
-                if self.show_settings {
-                    self.show_keyboard = true;
-                    self.settings_state.footer.set_target(1.0);
-                } else {
-                    self.show_keyboard = false;
-                    self.settings_state.footer.set_target(0.0);
-                }
+                self.show_keyboard = false;
+                self.settings_state.footer.set_target(0.0);
             }
             // Toggle the on-screen keyboard. Opens the settings overlay when
             // invoked from elsewhere in the app so the keyboard has a place to
@@ -1937,6 +1938,9 @@ impl MultiPanelApp {
                     KeyboardAction::Esc => {
                         self.show_help = false;
                         self.show_settings = false;
+                        self.show_keyboard = false;
+                        self.settings_state.footer.set_target(0.0);
+                        self.settings_state.footer.snap();
                     }
                     KeyboardAction::Left => self.handle_key(KeyCode::Left),
                     KeyboardAction::Down => self.handle_key(KeyCode::Down),
