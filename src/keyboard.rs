@@ -383,8 +383,11 @@ impl StatefulWidget for KeyboardWidget {
         }
 
         // Responsive breakpoints for the keyboard widget.
-        //   61×43 -> smallest size that still shows key characters.
-        //   73×31 -> smallest size that shows keys (outlines only).
+        //
+        // These numbers are widget-area targets that correspond to the terminal
+        // sizes the user specified (61×43 with labels, 73×31 without). In the
+        // current app layout the keyboard is rendered inside a bordered footer,
+        // so the widget area is smaller than the terminal by a few rows/cols.
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         enum Mode {
             Hidden,
@@ -392,9 +395,9 @@ impl StatefulWidget for KeyboardWidget {
             Labeled,
         }
 
-        let mode = if area.width >= 61 && area.height >= 43 {
+        let mode = if area.width >= 59 && area.height >= 18 {
             Mode::Labeled
-        } else if area.width >= 73 && area.height >= 31 {
+        } else if area.width >= 71 && area.height >= 12 {
             Mode::Unlabeled
         } else {
             Mode::Hidden
@@ -433,29 +436,19 @@ impl StatefulWidget for KeyboardWidget {
             .saturating_mul(base_key_height + BASE_GAP)
             .saturating_sub(BASE_GAP);
 
-        // Pick a single global scale that fits both the width and the height.
-        let scale_x = if max_base_row_width > 0 {
-            area.width / max_base_row_width
+        // Scale horizontally so each row fills the available width. Height is
+        // handled separately via the compact fallback below.
+        let scale = if max_base_row_width > 0 {
+            (area.width / max_base_row_width).max(1)
         } else {
             1
         };
-        let scale_y = if total_base_height > 0 {
-            area.height / total_base_height
-        } else {
-            1
-        };
-        let scale = scale_x.min(scale_y).max(1);
 
-        // If the chosen scale still doesn't fit vertically (e.g. the allocated
-        // area is shorter than the 1x keyboard), switch to a compact layout
-        // that removes vertical gaps and distributes the height evenly.
-        let scaled_total_height = total_base_height.saturating_mul(scale);
+        // If the 1x keyboard doesn't fit vertically, switch to a compact
+        // layout that removes vertical gaps and distributes the height evenly.
         let rows = self.rows.len() as u16;
-        let (key_height, v_gap) = if scaled_total_height <= area.height {
-            (
-                base_key_height.saturating_mul(scale),
-                BASE_GAP.saturating_mul(scale),
-            )
+        let (key_height, v_gap) = if total_base_height <= area.height {
+            (base_key_height, BASE_GAP)
         } else {
             let h = (area.height / rows).max(1);
             let gap = if h.saturating_mul(rows)
